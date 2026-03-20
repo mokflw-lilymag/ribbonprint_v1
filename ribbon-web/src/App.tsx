@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { toPng } from 'html-to-image';
+import { LogOut } from 'lucide-react';
 import { 
   Printer, 
   Settings, 
@@ -21,6 +22,7 @@ import { PhraseManagerDialog } from './PhraseManagerDialog';
 import { FolderOpen, Settings as SettingsIcon } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { type CustomFontInfo, getAllCustomFonts, getHiddenFonts } from './lib/font-store';
+import { useSubscription } from './lib/use-subscription';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -723,9 +725,15 @@ const RibbonCanvas = ({
 // ==========================================
 // Main Application
 // ==========================================
-export default function App() {
+import type { Session } from '@supabase/supabase-js';
+
+export default function App({ session }: { session?: Session }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
+
+  // Subscription State
+  const { subscription, loading: subLoading } = useSubscription();
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // Printer State
   const [printers, setPrinters] = useState<any[]>([]);
@@ -884,6 +892,12 @@ export default function App() {
   }, []);
 
   const handlePrint = async () => {
+    // 구독 상태 확인
+    if (!subscription.isActive) {
+       setShowPaywall(true);
+       return;
+    }
+
     if (!selectedPrinter) {
        alert("연결된 프린터를 선택해주세요.");
        return;
@@ -942,6 +956,22 @@ export default function App() {
        alert("인쇄 중 오류가 발생했습니다: " + error.message);
     } finally {
        setIsPrinting(false);
+
+       // 인쇄 이력 저장 (실패해도 무시)
+       try {
+         const { data: { user } } = await supabase.auth.getUser();
+         if (user) {
+           await supabase.from('print_history').insert([{
+             user_id: user.id,
+             ribbon_type: ribbonType,
+             width,
+             length,
+             left_text: leftText,
+             right_text: rightText,
+             printer_name: selectedPrinter,
+           }]);
+         }
+       } catch (_) { /* 이력 저장 실패는 무시 */ }
     }
   };
 
@@ -1058,11 +1088,35 @@ export default function App() {
       {/* 1. Left Panel: Settings */}
       <aside className="w-80 glass-panel flex flex-col shrink-0 z-10 p-5 overflow-y-auto space-y-6">
         <div>
-          <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2 mb-1">
-            <Ruler size={24} className="text-blue-500" />
-            RibbonMaker PRO
-          </h1>
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
+              <Ruler size={24} className="text-blue-500" />
+              RibbonMaker PRO
+            </h1>
+            <button
+              onClick={async () => { await supabase.auth.signOut(); }}
+              className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="로그아웃"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
           <p className="text-xs text-slate-400 font-mono">Build 2026.03 (Full-Fit Engine)</p>
+          {session?.user?.email && (
+            <p className="text-[11px] text-blue-400/80 mt-1 truncate" title={session.user.email}>👤 {session.user.email}</p>
+          )}
+          {/* Subscription Badge */}
+          {!subLoading && (
+            <div className={`mt-2 px-3 py-1.5 rounded-lg text-xs font-bold text-center ${
+              subscription.isActive 
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
+                : 'bg-red-500/15 text-red-400 border border-red-500/30'
+            }`}>
+              {subscription.isActive 
+                ? `✅ ${subscription.plan === 'monthly' ? '월간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'yearly' ? '연간' : ''} 구독 활성 (D-${subscription.daysRemaining})`
+                : '⚠️ 구독 만료 - 인쇄 기능 제한'
+              }
+            </div>
+          )}
         </div>
 
         {/* Specs */}
@@ -1682,6 +1736,42 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* Paywall Modal */}
+      {showPaywall && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center">
+            <div className="text-6xl mb-4">🔒</div>
+            <h2 className="text-2xl font-black text-white mb-2">구독이 필요합니다</h2>
+            <p className="text-slate-400 mb-6">인쇄 기능을 사용하려면 유효한 구독이 필요합니다.<br/>아래에서 요금제를 선택해주세요.</p>
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600 hover:border-blue-500 cursor-pointer transition">
+                <p className="text-lg font-bold text-white">1개월</p>
+                <p className="text-blue-400 font-black text-xl mt-1">₩29,900</p>
+                <p className="text-slate-500 text-xs mt-1">월간 결제</p>
+              </div>
+              <div className="bg-blue-600/20 rounded-xl p-4 border-2 border-blue-500 cursor-pointer transition relative">
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">인기</div>
+                <p className="text-lg font-bold text-white">3개월</p>
+                <p className="text-blue-400 font-black text-xl mt-1">₩79,900</p>
+                <p className="text-slate-500 text-xs mt-1">11% 할인</p>
+              </div>
+              <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600 hover:border-blue-500 cursor-pointer transition">
+                <p className="text-lg font-bold text-white">1년</p>
+                <p className="text-blue-400 font-black text-xl mt-1">₩269,900</p>
+                <p className="text-slate-500 text-xs mt-1">25% 할인</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">결제 시스템은 준비 중입니다. 관리자에게 문의해주세요.</p>
+            <button
+              onClick={() => setShowPaywall(false)}
+              className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold transition"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

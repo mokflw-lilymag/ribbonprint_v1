@@ -36,7 +36,11 @@ export function PhraseManagerDialog({ isOpen, onClose, onChanged }: PhraseManage
   const handeAdd = async () => {
     if (!newCat.trim() || !newText.trim()) return alert("카테고리와 상용구를 모두 입력하세요.");
     setIsLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { alert("로그인이 필요합니다."); setIsLoading(false); return; }
+
     const { error } = await supabase.from('custom_phrases').insert([{
+      user_id: user.id,
       category: newCat.trim(),
       text: newText.trim(),
       description: newDesc.trim() || ''

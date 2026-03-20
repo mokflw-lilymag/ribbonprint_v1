@@ -43,8 +43,12 @@ export function TemplateManagerDialog({ isOpen, onClose, currentConfig, onLoad }
 
     try {
       setIsLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert("로그인이 필요합니다."); return; }
+
       const { error } = await supabase.from('templates').insert([
         {
+          user_id: user.id,
           name: newTemplateName.trim(),
           config: currentConfig
         }
