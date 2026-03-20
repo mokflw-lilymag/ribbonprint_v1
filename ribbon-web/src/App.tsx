@@ -16,6 +16,8 @@ import {
   Eye
 } from 'lucide-react';
 import { FontManagerDialog } from './FontManagerDialog';
+import { TemplateManagerDialog } from './TemplateManagerDialog';
+import { FolderOpen } from 'lucide-react';
 import { type CustomFontInfo, getAllCustomFonts, getHiddenFonts } from './lib/font-store';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -785,6 +787,7 @@ export default function App() {
   const [hiddenFonts, setHiddenFonts] = useState<string[]>([]);
   const [customStyles, setCustomStyles] = useState<{id: string, css: string}[]>([]);
   const [isFontManagerOpen, setIsFontManagerOpen] = useState(false);
+  const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
 
   const loadFontSettings = async () => {
     const hidden = getHiddenFonts();
@@ -970,6 +973,41 @@ export default function App() {
   const handleResetRotation = (side: 'left'|'right') => {
     if (side === 'left') setLeftRotated(new Set());
     else setRightRotated(new Set());
+  };
+
+  const currentConfig = {
+    ribbonType, length, width, lace, marginTop, marginBottom,
+    leftText, leftFontConfig, leftRatioX, leftRatioY, leftRotated: Array.from(leftRotated), leftSpacing,
+    rightText, rightFontConfig, rightRatioX, rightRatioY, rightRotated: Array.from(rightRotated), rightSpacing,
+    printTarget, printLayout, mediaType
+  };
+
+  const onLoadConfig = (c: any) => {
+    if (!c) return;
+    if (c.ribbonType) setRibbonType(c.ribbonType);
+    if (c.length) setLength(c.length);
+    if (c.width) setWidth(c.width);
+    if (c.lace !== undefined) setLace(c.lace);
+    if (c.marginTop !== undefined) setMarginTop(c.marginTop);
+    if (c.marginBottom !== undefined) setMarginBottom(c.marginBottom);
+    
+    if (c.leftText !== undefined) setLeftText(c.leftText);
+    if (c.leftFontConfig) setLeftFontConfig(c.leftFontConfig);
+    if (c.leftRatioX) setLeftRatioX(c.leftRatioX);
+    if (c.leftRatioY) setLeftRatioY(c.leftRatioY);
+    if (c.leftRotated) setLeftRotated(new Set(c.leftRotated));
+    if (c.leftSpacing !== undefined) setLeftSpacing(c.leftSpacing);
+
+    if (c.rightText !== undefined) setRightText(c.rightText);
+    if (c.rightFontConfig) setRightFontConfig(c.rightFontConfig);
+    if (c.rightRatioX) setRightRatioX(c.rightRatioX);
+    if (c.rightRatioY) setRightRatioY(c.rightRatioY);
+    if (c.rightRotated) setRightRotated(new Set(c.rightRotated));
+    if (c.rightSpacing !== undefined) setRightSpacing(c.rightSpacing);
+
+    if (c.printTarget) setPrintTarget(c.printTarget);
+    if (c.printLayout) setPrintLayout(c.printLayout);
+    if (c.mediaType) setMediaType(c.mediaType);
   };
 
   return (
@@ -1416,6 +1454,14 @@ export default function App() {
         {/* Floating Actions */}
         <div className="fixed bottom-8 right-[320px] bg-slate-800/80 backdrop-blur-md p-2 rounded-full border border-slate-600 flex gap-2 shadow-2xl z-20">
           <button 
+            onClick={() => setIsTemplateManagerOpen(true)} 
+            className="p-2 rounded-full hover:bg-slate-700 text-amber-400 transition-colors flex items-center gap-2 px-4 whitespace-nowrap"
+          >
+            <FolderOpen size={18} />
+            <span className="text-xs font-bold uppercase">Templates</span>
+          </button>
+          <div className="w-px h-6 bg-slate-600 my-auto mx-1"></div>
+          <button 
             onClick={() => setIsPreviewMode(!isPreviewMode)} 
             className={cn(
               "p-2 rounded-full transition-colors flex items-center gap-2 px-4 whitespace-nowrap", 
@@ -1521,6 +1567,14 @@ export default function App() {
         }} 
         baseFonts={FONTS}
         onSettingsChanged={loadFontSettings}
+      />
+
+      {/* Template Manager Dialog */}
+      <TemplateManagerDialog
+        isOpen={isTemplateManagerOpen}
+        onClose={() => setIsTemplateManagerOpen(false)}
+        currentConfig={currentConfig}
+        onLoad={onLoadConfig}
       />
 
       {/* Hidden Professional Capture Areas (Not visible to user) */}
