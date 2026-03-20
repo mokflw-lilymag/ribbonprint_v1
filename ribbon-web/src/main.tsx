@@ -3,12 +3,15 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import Auth from './Auth.tsx'
+import AdminDashboard from './AdminDashboard.tsx'
 import { supabase } from './lib/supabase.ts'
 import type { Session } from '@supabase/supabase-js'
 
 function Root() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -20,10 +23,35 @@ function Root() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (!session) {
+        setIsAdmin(false);
+        setShowAdmin(false);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // 관리자 권한 확인
+  useEffect(() => {
+    if (session?.user?.id) {
+      // 1. 특정 이메일은 항상 관리자로 인정 (치트키)
+      if (session.user.email === 'lilymag0301@gmail.com') {
+        setIsAdmin(true);
+        return;
+      }
+
+      // 2. 나머지는 DB 확인
+      supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+        .then(({ data }) => {
+          setIsAdmin(data?.role === 'admin');
+        });
+    }
+  }, [session?.user?.id, session?.user?.email]);
 
   if (loading) {
     return (
@@ -40,8 +68,19 @@ function Root() {
     return <Auth onAuthenticated={() => {}} />
   }
 
-  // App component can now assume a user is logged in
-  return <App session={session} />
+  // 관리자 대시보드 뷰
+  if (showAdmin && isAdmin) {
+    return <AdminDashboard onBack={() => setShowAdmin(false)} />
+  }
+
+  // App component with admin toggle
+  return (
+    <App
+      session={session}
+      isAdmin={isAdmin}
+      onShowAdmin={() => setShowAdmin(true)}
+    />
+  )
 }
 
 createRoot(document.getElementById('root')!).render(
@@ -49,3 +88,4 @@ createRoot(document.getElementById('root')!).render(
     <Root />
   </StrictMode>,
 )
+

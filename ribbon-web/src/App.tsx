@@ -14,7 +14,8 @@ import {
   Search,
   Check,
   Wrench,
-  Eye
+  Eye,
+  Shield
 } from 'lucide-react';
 import { FontManagerDialog } from './FontManagerDialog';
 import { TemplateManagerDialog } from './TemplateManagerDialog';
@@ -414,7 +415,7 @@ const RibbonCanvas = ({
             }}
           >
             <span 
-              className={cn("absolute text-[14px] text-red-500 font-black bg-[#0f172a] px-1 whitespace-nowrap", side === 'left' ? "left-0" : "right-0")}
+              className={cn("absolute text-[14px] text-red-500 font-bold bg-[#0f172a] px-1 whitespace-nowrap", side === 'left' ? "left-0" : "right-0")}
               style={{ 
                 transform: `scale(${1/zoom})`, 
                 transformOrigin: side === 'left' ? 'left bottom' : 'right bottom',
@@ -436,7 +437,7 @@ const RibbonCanvas = ({
             }}
           >
             <span 
-              className={cn("absolute text-[14px] text-red-500 font-black bg-[#0f172a] px-1 whitespace-nowrap", side === 'left' ? "left-0" : "right-0")}
+              className={cn("absolute text-[14px] text-red-500 font-bold bg-[#0f172a] px-1 whitespace-nowrap", side === 'left' ? "left-0" : "right-0")}
               style={{ 
                 transform: `scale(${1/zoom})`, 
                 transformOrigin: side === 'left' ? 'left top' : 'right top',
@@ -516,7 +517,7 @@ const RibbonCanvas = ({
             return (
               <div 
                 key={lIdx} 
-                className="flex flex-col items-center shrink-0 w-max text-black font-bold whitespace-nowrap"
+                className="flex flex-col items-center shrink-0 w-max text-black font-semibold whitespace-nowrap"
                 style={{
                   height: squashRatio < 1 ? `${totalRequiredHeight}px` : (spacing === 0 ? '100%' : 'auto'),
                   transform: squashRatio < 1 ? `scaleY(${squashRatio})` : 'none',
@@ -727,7 +728,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-export default function App({ session }: { session?: Session }) {
+export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
 
@@ -892,8 +893,8 @@ export default function App({ session }: { session?: Session }) {
   }, []);
 
   const handlePrint = async () => {
-    // 구독 상태 확인
-    if (!subscription.isActive) {
+    // 구독 상태 확인 (관리자는 항상 허용)
+    if (!isAdmin && !subscription.isActive) {
        setShowPaywall(true);
        return;
     }
@@ -1089,16 +1090,27 @@ export default function App({ session }: { session?: Session }) {
       <aside className="w-80 glass-panel flex flex-col shrink-0 z-10 p-5 overflow-y-auto space-y-6">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
               <Ruler size={24} className="text-blue-500" />
               RibbonMaker PRO
             </h1>
-            <button
-              onClick={async () => { await supabase.auth.signOut(); }}
-              className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="로그아웃"
-            >
-              <LogOut size={18} />
-            </button>
+            <div className="flex items-center gap-1">
+              {isAdmin && (
+                <button
+                  onClick={onShowAdmin}
+                  className="p-1.5 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 transition" 
+                  title="관리자 대시보드"
+                >
+                  <Shield size={18} />
+                </button>
+              )}
+              <button
+                onClick={async () => { await supabase.auth.signOut(); }}
+                className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="로그아웃"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
           <p className="text-xs text-slate-400 font-mono">Build 2026.03 (Full-Fit Engine)</p>
           {session?.user?.email && (
@@ -1106,14 +1118,18 @@ export default function App({ session }: { session?: Session }) {
           )}
           {/* Subscription Badge */}
           {!subLoading && (
-            <div className={`mt-2 px-3 py-1.5 rounded-lg text-xs font-bold text-center ${
-              subscription.isActive 
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
-                : 'bg-red-500/15 text-red-400 border border-red-500/30'
+            <div className={`mt-2 px-3 py-1.5 rounded-lg text-xs font-medium text-center border tracking-wide ${
+              isAdmin
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                : subscription.isActive 
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                  : 'bg-red-500/15 text-red-400 border-red-500/30'
             }`}>
-              {subscription.isActive 
-                ? `✅ ${subscription.plan === 'monthly' ? '월간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'yearly' ? '연간' : ''} 구독 활성 (D-${subscription.daysRemaining})`
-                : '⚠️ 구독 만료 - 인쇄 기능 제한'
+              {isAdmin
+                ? '🛡️ 관리자 - 모든 기능 사용 가능'
+                : subscription.isActive 
+                  ? `✅ ${subscription.plan === 'monthly' ? '월간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'yearly' ? '연간' : ''} 구독 활성 (D-${subscription.daysRemaining})`
+                  : '⚠️ 구독 만료 - 인쇄 기능 제한'
               }
             </div>
           )}
@@ -1121,7 +1137,7 @@ export default function App({ session }: { session?: Session }) {
 
         {/* Specs */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-slate-300 font-bold mb-2 border-b border-slate-700 pb-2">
+          <div className="flex items-center gap-2 text-slate-300 font-semibold mb-2 border-b border-slate-700 pb-2">
             <Settings size={16} /> 하드웨어 규격
           </div>
           <div>
@@ -1193,7 +1209,7 @@ export default function App({ session }: { session?: Session }) {
               <label className="text-xs text-slate-400">출력 프린터</label>
               <div className="flex items-center gap-1.5">
                 <div className={cn("w-2 h-2 rounded-full animate-pulse", printers.length > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500")} />
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Live Agent</span>
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tighter">Live Agent</span>
               </div>
             </div>
             <div className="flex gap-2">
@@ -1240,7 +1256,7 @@ export default function App({ session }: { session?: Session }) {
 
         {/* Left Ribbon Detail */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-slate-300 font-bold mb-1 border-b border-slate-700 pb-2">
+          <div className="flex items-center justify-between text-slate-300 font-semibold mb-1 border-b border-slate-700 pb-2">
             <div className="flex items-center gap-2"><Type size={16} /> 좌측 리본 (경조사)</div>
             <div className="flex items-center gap-1">
               <button 
@@ -1273,7 +1289,7 @@ export default function App({ session }: { session?: Session }) {
           />
           <div className="flex flex-col gap-3 p-3 bg-slate-800/80 rounded-xl border border-slate-700">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-400">🧙 폰트 마법사</span>
+              <span className="text-xs font-semibold text-blue-400">🧙 폰트 마법사</span>
               <div className="flex gap-1 overflow-x-auto">
                 {(['ko', 'hj', 'en', 'sym'] as const).map(type => (
                   <button 
@@ -1338,7 +1354,7 @@ export default function App({ session }: { session?: Session }) {
 
         {/* Right Ribbon Detail */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-slate-300 font-bold mb-1 border-b border-slate-700 pb-2">
+          <div className="flex items-center justify-between text-slate-300 font-semibold mb-1 border-b border-slate-700 pb-2">
             <div className="flex items-center gap-2"><Type size={16} /> 우측 리본 (보내는이)</div>
             <div className="flex items-center gap-1">
               <button 
@@ -1371,7 +1387,7 @@ export default function App({ session }: { session?: Session }) {
           />
           <div className="flex flex-col gap-3 p-3 bg-slate-800/80 rounded-xl border border-slate-700">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-400">🧙 폰트 마법사</span>
+              <span className="text-xs font-semibold text-blue-400">🧙 폰트 마법사</span>
               <div className="flex gap-1 overflow-x-auto">
                 {(['ko', 'hj', 'en', 'sym'] as const).map(type => (
                   <button 
@@ -1455,7 +1471,7 @@ export default function App({ session }: { session?: Session }) {
           {isPreviewMode ? (
             // ================= PREVIEW MODE =================
             <div className="flex flex-col items-center">
-              <div className="text-blue-400 font-bold mb-8 text-2xl uppercase tracking-widest border-b border-blue-400/30 pb-2">
+              <div className="text-blue-400 font-semibold mb-8 text-2xl uppercase tracking-widest border-b border-blue-400/30 pb-2">
                 Print Preview ({printTarget === 'both' ? (printLayout === 'connected' ? 'Connected' : 'Separate Both') : printTarget})
               </div>
               
@@ -1554,7 +1570,7 @@ export default function App({ session }: { session?: Session }) {
             className="p-2 rounded-full hover:bg-slate-700 text-amber-400 transition-colors flex items-center gap-2 px-4 whitespace-nowrap"
           >
             <FolderOpen size={18} />
-            <span className="text-xs font-bold uppercase">Templates</span>
+            <span className="text-xs font-semibold uppercase">Templates</span>
           </button>
           <div className="w-px h-6 bg-slate-600 my-auto mx-1"></div>
           <button 
@@ -1565,7 +1581,7 @@ export default function App({ session }: { session?: Session }) {
             )}
           >
             {isPreviewMode ? <Maximize2 size={18} /> : <Eye size={18} />}
-            <span className="text-xs font-bold uppercase">{isPreviewMode ? "Design" : "Preview"}</span>
+            <span className="text-xs font-semibold uppercase">{isPreviewMode ? "Design" : "Preview"}</span>
           </button>
           <div className="w-px h-6 bg-slate-600 my-auto"></div>
           <button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} className="p-2 hover:bg-slate-700 rounded-full transition-colors"><Minimize2 size={18} /></button>
@@ -1596,7 +1612,7 @@ export default function App({ session }: { session?: Session }) {
         <div>
           <div className="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
              <div className="flex items-center gap-2">
-               <h2 className="text-sm font-bold text-slate-300">자주 쓰는 상용구</h2>
+               <h3 className="text-xs font-semibold text-slate-400">자주 쓰는 상용구</h3>
                <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="상용구 관리 (DB)">
                  <SettingsIcon size={14} />
                </button>
@@ -1619,7 +1635,7 @@ export default function App({ session }: { session?: Session }) {
                  }}
                  className="group bg-slate-800 hover:bg-blue-900/30 border border-slate-700 hover:border-blue-500 rounded p-2 transition-all flex flex-col items-center justify-center min-h-[50px] overflow-hidden"
                >
-                 <span className="text-[12px] font-bold text-slate-200 mb-0.5 leading-tight truncate w-full text-center">{item.text}</span>
+                 <span className="text-[12px] font-semibold text-slate-200 mb-0.5 leading-tight truncate w-full text-center">{item.text}</span>
                  <span className="text-[9px] text-slate-500 group-hover:text-blue-300 truncate w-full text-center">{item.desc}</span>
                </button>
             ))}
@@ -1627,7 +1643,7 @@ export default function App({ session }: { session?: Session }) {
         </div>
 
         <div>
-          <h2 className="text-sm font-bold text-slate-300 border-b border-slate-700 pb-2 mb-3">특수기호 (Click to Insert)</h2>
+          <h3 className="text-xs font-semibold text-slate-400">특수기호 (Click to Insert)</h3>
           <div className="grid grid-cols-4 gap-2">
             {SYMBOL_BANK.map(sym => (
                <button 
@@ -1642,7 +1658,7 @@ export default function App({ session }: { session?: Session }) {
         </div>
 
         <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 space-y-2 mt-auto">
-          <h3 className="text-xs font-bold text-blue-400 mb-2">프리뷰 팁 (7대 법칙)</h3>
+          <h3 className="text-xs font-semibold text-blue-400 mb-2">프리뷰 팁 (7대 법칙)</h3>
           <ul className="text-[10px] text-slate-400 space-y-1 ml-3 list-disc">
             <li>영문/숫자는 자동 회전됩니다. <strong>클릭</strong>하여 수동으로 눕힐 수 있습니다.</li>
             <li><code>[홍길동]</code> 입력 시 한 칸에 알맞게 압축됩니다.</li>
@@ -1742,30 +1758,29 @@ export default function App({ session }: { session?: Session }) {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
           <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center">
             <div className="text-6xl mb-4">🔒</div>
-            <h2 className="text-2xl font-black text-white mb-2">구독이 필요합니다</h2>
+            <h2 className="text-2xl font-semibold text-white mb-2">구독이 필요합니다</h2>
             <p className="text-slate-400 mb-6">인쇄 기능을 사용하려면 유효한 구독이 필요합니다.<br/>아래에서 요금제를 선택해주세요.</p>
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600 hover:border-blue-500 cursor-pointer transition">
-                <p className="text-lg font-bold text-white">1개월</p>
-                <p className="text-blue-400 font-black text-xl mt-1">₩29,900</p>
+                <p className="text-lg font-semibold text-white">1개월</p>
+                <p className="text-blue-400 font-semibold text-xl mt-1">₩29,900</p>
                 <p className="text-slate-500 text-xs mt-1">월간 결제</p>
               </div>
               <div className="bg-blue-600/20 rounded-xl p-4 border-2 border-blue-500 cursor-pointer transition relative">
-                <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">인기</div>
-                <p className="text-lg font-bold text-white">3개월</p>
-                <p className="text-blue-400 font-black text-xl mt-1">₩79,900</p>
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">인기</div>
+                <p className="text-lg font-semibold text-white">3개월</p>
+                <p className="text-blue-400 font-semibold text-xl mt-1">₩79,900</p>
                 <p className="text-slate-500 text-xs mt-1">11% 할인</p>
               </div>
               <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600 hover:border-blue-500 cursor-pointer transition">
-                <p className="text-lg font-bold text-white">1년</p>
-                <p className="text-blue-400 font-black text-xl mt-1">₩269,900</p>
+                <p className="text-blue-400 font-semibold text-xl mt-1">₩269,900</p>
                 <p className="text-slate-500 text-xs mt-1">25% 할인</p>
               </div>
             </div>
             <p className="text-xs text-slate-500 mb-4">결제 시스템은 준비 중입니다. 관리자에게 문의해주세요.</p>
             <button
               onClick={() => setShowPaywall(false)}
-              className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold transition"
+              className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition"
             >
               닫기
             </button>

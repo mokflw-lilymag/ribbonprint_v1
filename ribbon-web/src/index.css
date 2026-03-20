@@ -5,6 +5,7 @@
 @import url('https://fonts.googleapis.com/css2?family=UoqMunThenKhung&family=Iansui&family=Kaisei+HarunoUmi:wght@400;700&family=Zen+Antique+Soft&display=swap');
 
 @theme {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --color-brand: #3b82f6;
   --color-brand-hover: #2563eb;
   --color-brand-dark: #1e3a8a;
@@ -29,8 +30,11 @@
 }
 
 :root {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {

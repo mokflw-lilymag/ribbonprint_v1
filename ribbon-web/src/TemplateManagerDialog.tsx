@@ -88,7 +88,7 @@ export function TemplateManagerDialog({ isOpen, onClose, currentConfig, onLoad }
         
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900/50">
-          <h2 className="text-white font-bold flex items-center gap-2">
+          <h2 className="text-white font-semibold flex items-center gap-2">
             <FolderOpen size={18} className="text-blue-400" /> 템플릿 보관함
           </h2>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded">
@@ -101,7 +101,7 @@ export function TemplateManagerDialog({ isOpen, onClose, currentConfig, onLoad }
           
           {/* New Template Form */}
           <div className="flex flex-col gap-2 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-            <label className="text-xs font-bold text-slate-300">현재 디자인 저장하기</label>
+            <label className="text-xs font-semibold text-slate-300">현재 디자인 저장하기</label>
             <div className="flex gap-2">
               <input 
                 type="text" 
@@ -114,7 +114,7 @@ export function TemplateManagerDialog({ isOpen, onClose, currentConfig, onLoad }
               <button 
                 onClick={saveTemplate}
                 disabled={isLoading}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Save size={16} /> 저장
               </button>
@@ -123,7 +123,7 @@ export function TemplateManagerDialog({ isOpen, onClose, currentConfig, onLoad }
 
           {/* Template List */}
           <div className="flex flex-col flex-1 min-h-[200px] max-h-[400px]">
-            <label className="text-xs font-bold text-slate-400 mb-3 block">저장된 템플릿 목록</label>
+            <label className="text-xs font-semibold text-slate-400 mb-3 block">저장된 템플릿 목록</label>
             
             <div className="overflow-y-auto pr-1 flex-1 flex flex-col gap-2">
               {isLoading && templates.length === 0 ? (
@@ -134,7 +134,7 @@ export function TemplateManagerDialog({ isOpen, onClose, currentConfig, onLoad }
                 templates.map(tpl => (
                   <div key={tpl.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-700 bg-slate-800 hover:border-blue-500/50 transition-colors group">
                     <div className="flex flex-col cursor-pointer flex-1" onClick={() => { onLoad(tpl.config); onClose(); }}>
-                      <span className="text-white text-sm font-bold">{tpl.name}</span>
+                      <span className="text-white text-sm font-semibold">{tpl.name}</span>
                       <span className="text-slate-500 text-[10px] mt-0.5">
                         {new Date(tpl.created_at).toLocaleDateString()}
                       </span>
@@ -142,7 +142,7 @@ export function TemplateManagerDialog({ isOpen, onClose, currentConfig, onLoad }
                     <div className="flex items-center gap-2 ml-4">
                       <button 
                          onClick={() => { onLoad(tpl.config); onClose(); }}
-                         className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-bold transition-colors"
+                         className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-semibold transition-colors"
                       >
                          불러오기
                       </button>

@@ -1,0 +1,467 @@
+import { useState, useEffect } from 'react';
+import { supabase } from './lib/supabase';
+import { 
+  Shield, Users, CreditCard, BarChart3, Plus, 
+  ArrowLeft, Search, Calendar, Printer, RefreshCw 
+} from 'lucide-react';
+
+interface Profile {
+  id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  created_at: string;
+}
+
+interface Subscription {
+  id: string;
+  user_id: string;
+  plan: string;
+  status: string;
+  started_at: string;
+  expires_at: string | null;
+  payment_method: string;
+  amount: number;
+}
+
+interface PrintStat {
+  user_id: string;
+  email: string;
+  print_count: number;
+}
+
+export default function AdminDashboard({ onBack }: { onBack: () => void }) {
+  const [tab, setTab] = useState<'users' | 'stats'>('users');
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [printStats, setPrintStats] = useState<PrintStat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'admin' | 'monthly' | 'quarterly' | 'half_yearly' | 'yearly' | 'event' | 'expired'>('all');
+
+  // 구독 연장 모달
+  const [extendModal, setExtendModal] = useState<{ userId: string; email: string } | null>(null);
+  const [extendPlan, setExtendPlan] = useState<string>('monthly');
+  const [extendDays, setExtendDays] = useState(30);
+  const [extendAmount, setExtendAmount] = useState(29900);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // 사용자 목록
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setUsers(profileData || []);
+
+      // 구독 현황
+      const { data: subData } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setSubscriptions(subData || []);
+
+      // 인쇄 통계 (사용자별 횟수)
+      const { data: historyData } = await supabase
+        .from('print_history')
+        .select('user_id, printed_at');
+      
+      if (historyData && profileData) {
+        const countMap = new Map<string, number>();
+        historyData.forEach((h: any) => {
+          countMap.set(h.user_id, (countMap.get(h.user_id) || 0) + 1);
+        });
+        const stats: PrintStat[] = profileData.map((u: any) => ({
+          user_id: u.id,
+          email: u.email || '',
+          print_count: countMap.get(u.id) || 0,
+        }));
+        stats.sort((a, b) => b.print_count - a.print_count);
+        setPrintStats(stats);
+      }
+    } catch (err) {
+      console.error('Admin load error:', err);
+    }
+    setLoading(false);
+  };
+
+  const getUserSub = (userId: string): Subscription | undefined => {
+    return subscriptions.find(s => s.user_id === userId);
+  };
+
+  const isSubActive = (sub?: Subscription): boolean => {
+    if (!sub || !sub.expires_at) return false;
+    return new Date(sub.expires_at) > new Date() && sub.status === 'active';
+  };
+
+  const handleExtend = async () => {
+    if (!extendModal) return;
+    try {
+      const existingSub = getUserSub(extendModal.userId);
+      const baseDate = existingSub?.expires_at && new Date(existingSub.expires_at) > new Date()
+        ? new Date(existingSub.expires_at)
+        : new Date();
+      
+      const newExpiry = new Date(baseDate);
+      newExpiry.setDate(newExpiry.getDate() + extendDays);
+
+      if (existingSub) {
+        // 기존 구독 업데이트
+        await supabase
+          .from('subscriptions')
+          .update({
+            plan: extendPlan,
+            status: 'active',
+            expires_at: newExpiry.toISOString(),
+            payment_method: 'admin_manual',
+            amount: extendAmount,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingSub.id);
+      } else {
+        // 새 구독 생성
+        await supabase
+          .from('subscriptions')
+          .insert([{
+            user_id: extendModal.userId,
+            plan: extendPlan,
+            status: 'active',
+            started_at: new Date().toISOString(),
+            expires_at: newExpiry.toISOString(),
+            payment_method: 'admin_manual',
+            amount: extendAmount,
+          }]);
+      }
+
+      alert(`${extendModal.email} 구독이 ${newExpiry.toLocaleDateString()}까지 연장되었습니다.`);
+      setExtendModal(null);
+      loadData();
+    } catch (err: any) {
+      alert('연장 실패: ' + err.message);
+    }
+  };
+
+  const filteredUsers = users.filter(u => {
+    const sub = getUserSub(u.id);
+    const active = isSubActive(sub);
+    const matchesSearch = (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
+                          (u.display_name || '').toLowerCase().includes(search.toLowerCase());
+    
+    if (filter === 'all') return matchesSearch;
+    if (filter === 'admin') return matchesSearch && u.role === 'admin';
+    if (filter === 'expired') return matchesSearch && !active && u.role !== 'admin';
+    return matchesSearch && active && sub?.plan === filter;
+  });
+
+  const planLabel = (plan: string) => {
+    switch (plan) {
+      case 'monthly': return '월간';
+      case 'quarterly': return '3개월';
+      case 'half_yearly': return '6개월';
+      case 'yearly': return '연간';
+      case 'event': return '이벤트/무료';
+      default: return plan;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white font-sans">
+      {/* Header */}
+      <header className="bg-slate-800/80 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="p-2 hover:bg-slate-700 rounded-lg transition">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <Shield size={22} className="text-amber-400/80" />
+            <h1 className="text-lg font-semibold">관리자 대시보드</h1>
+          </div>
+        </div>
+        <button onClick={loadData} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> 새로고침
+        </button>
+      </header>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4 p-6">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-blue-500/20 p-2 rounded-lg"><Users size={20} className="text-blue-400" /></div>
+            <span className="text-slate-400 text-sm">전체 가입자</span>
+          </div>
+          <p className="text-3xl font-semibold">{users.length}<span className="text-base text-slate-500 ml-1">명</span></p>
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-emerald-500/20 p-2 rounded-lg"><CreditCard size={20} className="text-emerald-400" /></div>
+            <span className="text-slate-400 text-sm">활성 구독자</span>
+          </div>
+          <p className="text-3xl font-semibold text-emerald-400">
+            {subscriptions.filter(s => isSubActive(s)).length}
+            <span className="text-base text-slate-500 ml-1">명</span>
+          </p>
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-purple-500/20 p-2 rounded-lg"><Printer size={20} className="text-purple-400" /></div>
+            <span className="text-slate-400 text-sm">총 인쇄 횟수</span>
+          </div>
+          <p className="text-3xl font-semibold text-purple-400">
+            {printStats.reduce((s, p) => s + p.print_count, 0)}
+            <span className="text-base text-slate-500 ml-1">회</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="px-6 flex gap-2 border-b border-slate-700">
+        <button
+          onClick={() => setTab('users')}
+          className={`px-4 py-3 text-sm font-semibold border-b-2 transition ${
+            tab === 'users' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-white'
+          }`}
+        >
+          <Users size={14} className="inline mr-2" />사용자 관리
+        </button>
+        <button
+          onClick={() => setTab('stats')}
+          className={`px-4 py-3 text-sm font-bold border-b-2 transition ${
+            tab === 'stats' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-white'
+          }`}
+        >
+          <BarChart3 size={14} className="inline mr-2" />인쇄 통계
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-6">
+        {tab === 'users' && (
+          <div>
+            {/* Search */}
+            <div className="flex gap-3 mb-4">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="이메일 또는 이름으로 검색..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <select
+                value={filter}
+                onChange={e => setFilter(e.target.value as any)}
+                className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 min-w-[150px]"
+              >
+                <option value="all">전체 사용자</option>
+                <option value="admin">관리자만(🛡️)</option>
+                <option value="monthly">월간 구독자</option>
+                <option value="quarterly">3개월 구독자</option>
+                <option value="half_yearly">6개월 구독자</option>
+                <option value="yearly">연간 구독자</option>
+                <option value="event">이벤트/무료 구독자</option>
+                <option value="expired">구독 만료자</option>
+              </select>
+            </div>
+
+            {/* User Table */}
+            <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-700/50 text-slate-400 text-xs uppercase tracking-wider">
+                    <th className="text-left px-4 py-3">사용자</th>
+                    <th className="text-left px-4 py-3">가입일</th>
+                    <th className="text-left px-4 py-3">구독 상태</th>
+                    <th className="text-left px-4 py-3">만료일</th>
+                    <th className="text-left px-4 py-3">인쇄 수</th>
+                    <th className="text-center px-4 py-3">관리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map(user => {
+                    const sub = getUserSub(user.id);
+                    const active = isSubActive(sub);
+                    const stat = printStats.find(p => p.user_id === user.id);
+                    return (
+                      <tr key={user.id} className="border-t border-slate-700/50 hover:bg-slate-700/30 transition">
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-white">{user.display_name || '-'}</span>
+                            <span className="text-[11px] text-slate-500">{user.email}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-400 text-xs">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          {user.role === 'admin' ? (
+                            <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded-full text-xs font-semibold">
+                              🛡️ 관리자
+                            </span>
+                          ) : active ? (
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              sub?.plan === 'event' ? 'bg-purple-500/20 text-purple-400' : 'bg-emerald-500/20 text-emerald-400'
+                            }`}>
+                              {sub?.plan === 'event' ? '🎁 ' : '✅ '} {planLabel(sub!.plan)}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-red-500/15 text-red-400 rounded-full text-xs font-semibold">
+                              만료
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400">
+                          {sub?.expires_at ? new Date(sub.expires_at).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono text-slate-300">
+                          {stat?.print_count || 0}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => setExtendModal({ userId: user.id, email: user.email })}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1 mx-auto"
+                          >
+                            <Plus size={12} /> 구독 부여
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-slate-500">
+                        {loading ? '로딩 중...' : '사용자가 없습니다.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tab === 'stats' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-400">사용자별 인쇄 횟수 (상위 순)</h3>
+            <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-700/50 text-slate-400 text-xs uppercase">
+                    <th className="text-left px-4 py-3">#</th>
+                    <th className="text-left px-4 py-3">이메일</th>
+                    <th className="text-left px-4 py-3">인쇄 횟수</th>
+                    <th className="text-left px-4 py-3">비율</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {printStats.map((stat, idx) => {
+                    const total = printStats.reduce((s, p) => s + p.print_count, 0);
+                    const pct = total > 0 ? (stat.print_count / total * 100).toFixed(1) : '0';
+                    return (
+                      <tr key={stat.user_id} className="border-t border-slate-700/50">
+                        <td className="px-4 py-3 text-slate-500 font-mono">{idx + 1}</td>
+                        <td className="px-4 py-3 text-white">{stat.email}</td>
+                        <td className="px-4 py-3 font-semibold text-blue-400 font-mono">{stat.print_count}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 bg-slate-700 rounded-full flex-1 overflow-hidden">
+                              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-xs text-slate-500 w-12 text-right">{pct}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {printStats.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-center py-10 text-slate-500">인쇄 기록이 없습니다.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Extend Subscription Modal */}
+      {extendModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+              <Calendar size={18} className="text-blue-400" /> 구독 부여/연장
+            </h2>
+            <p className="text-sm text-slate-400 mb-5">{extendModal.email}</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">요금제</label>
+                  <select
+                    value={extendPlan}
+                    onChange={e => {
+                      setExtendPlan(e.target.value);
+                      if (e.target.value === 'monthly') { setExtendDays(30); setExtendAmount(29900); }
+                      else if (e.target.value === 'quarterly') { setExtendDays(90); setExtendAmount(79900); }
+                      else if (e.target.value === 'half_yearly') { setExtendDays(180); setExtendAmount(149900); }
+                      else if (e.target.value === 'yearly') { setExtendDays(365); setExtendAmount(269900); }
+                      else if (e.target.value === 'event') { setExtendDays(7); setExtendAmount(0); }
+                    }}
+                    className="w-full p-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm"
+                  >
+                    <option value="monthly">월간 (30일)</option>
+                    <option value="quarterly">3개월 (90일)</option>
+                    <option value="half_yearly">6개월 (180일)</option>
+                    <option value="yearly">연간 (365일)</option>
+                    <option value="event">이벤트/무료 쿠폰 (7일)</option>
+                  </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">기간 (일)</label>
+                  <input
+                    type="number"
+                    value={extendDays}
+                    onChange={e => setExtendDays(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm text-center font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">결제 금액 (원)</label>
+                  <input
+                    type="number"
+                    value={extendAmount}
+                    onChange={e => setExtendAmount(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm text-center font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => setExtendModal(null)}
+                  className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold text-sm transition"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleExtend}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold text-sm transition"
+                >
+                  구독 부여
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

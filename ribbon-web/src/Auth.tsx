@@ -43,7 +43,7 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: () => void 
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans pattern-bg">
       <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-700">
         <div className="p-8 text-center border-b border-slate-700 bg-slate-800/50">
-          <h1 className="text-3xl font-black text-white mb-2 tracking-tight">RibbonPrint <span className="text-blue-500">SaaS</span></h1>
+          <h1 className="text-3xl font-semibold text-white mb-2 tracking-tight">RibbonPrint <span className="text-blue-500">SaaS</span></h1>
           <p className="text-slate-400 text-sm">프리미엄 리본 출력 서비스에 오신 것을 환영합니다</p>
         </div>
         
@@ -90,7 +90,7 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: () => void 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50"
+              className="w-full flex justify-center items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg transition disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLogin ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />)}
               {isLogin ? '로그인' : '계정 생성'}
