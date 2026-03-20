@@ -15,7 +15,9 @@ import {
   Check,
   Wrench,
   Eye,
-  Shield
+  Shield,
+  Menu,
+  X
 } from 'lucide-react';
 import { FontManagerDialog } from './FontManagerDialog';
 import { TemplateManagerDialog } from './TemplateManagerDialog';
@@ -735,6 +737,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   // Subscription State
   const { subscription, loading: subLoading } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const checkSubscriptionAction = (action: () => void) => {
     if (isAdmin || subscription.isActive) {
@@ -808,6 +811,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [isFontManagerOpen, setIsFontManagerOpen] = useState(false);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [isPhraseManagerOpen, setIsPhraseManagerOpen] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
   const [phraseCategories, setPhraseCategories] = useState(DEFAULT_PHRASE_CATEGORIES);
 
   const loadCustomPhrases = async () => {
@@ -1094,31 +1099,46 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   return (
     <div className="flex bg-slate-900 text-slate-200 h-screen w-screen overflow-hidden text-sm">
       
-      {/* 1. Left Panel: Settings */}
-      <aside className="hidden lg:flex w-80 glass-panel flex flex-col shrink-0 z-10 p-5 overflow-y-auto space-y-6">
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
-              RibbonMaker <span className="text-blue-500">PRO</span>
-            </h1>
-            <div className="flex items-center gap-1.5">
-              {isAdmin && (
-                <button
-                  onClick={onShowAdmin}
-                  className="p-1.5 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 transition" 
-                  title="관리자 대시보드"
-                >
-                  <Shield size={18} />
-                </button>
-              )}
+      {/* 1. Left Panel: Settings (Mobile Drawer) */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+      <aside className={cn(
+        "fixed lg:static inset-y-0 left-0 w-80 glass-panel flex flex-col shrink-0 z-50 p-5 overflow-y-auto space-y-6 transition-transform duration-300",
+        isSidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full lg:translate-x-0 lg:flex"
+      )}>
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
+            RibbonMaker <span className="text-blue-500">PRO</span>
+          </h1>
+          <div className="flex items-center gap-1.5">
+            <button 
+              className="lg:hidden p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X size={20} />
+            </button>
+            {isAdmin && (
               <button
-                onClick={async () => { await supabase.auth.signOut(); }}
-                className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="로그아웃"
+                onClick={onShowAdmin}
+                className="p-1.5 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 transition" 
+                title="관리자 대시보드"
               >
-                <LogOut size={18} />
+                <Shield size={18} />
               </button>
-            </div>
+            )}
+            <button
+              onClick={async () => { await supabase.auth.signOut(); }}
+              className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="로그아웃"
+            >
+              <LogOut size={18} />
+            </button>
           </div>
+        </div>
+        <div>
           <p className="text-[10px] text-slate-400 font-mono">Build 2026.03 (Full-Fit Engine)</p>
           {session?.user?.email && (
             <p className="text-[10px] text-blue-400/80 mt-1 truncate" title={session.user.email}>👤 {session.user.email}</p>
@@ -1457,8 +1477,17 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       </aside>
 
       {/* 2. Center Panel: Canvas */}
-      <main ref={mainRef} className="flex-1 relative overflow-auto p-12 bg-[#0f172a] min-w-0">
-        
+      <main ref={mainRef} className="flex-1 relative overflow-auto p-4 sm:p-12 bg-[#0f172a] min-w-0 transition-all duration-300">
+        {/* Mobile Menu Toggle Floating Button */}
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="lg:hidden fixed top-4 left-4 z-30 p-2.5 bg-blue-600/90 text-white rounded-xl shadow-lg shadow-blue-900/40 backdrop-blur hover:bg-blue-500 transition active:scale-95"
+          title="메뉴 열기"
+        >
+          <Menu size={24} />
+        </button>
+
+        <div className="flex justify-center items-start min-h-full py-8 lg:py-0">
         {/* Design Canvas Area */}
         <div 
           className={cn(
@@ -1568,8 +1597,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             </div>
           )}
         </div>
+      </div>
 
-        {/* Floating Actions */}
+      {/* Floating Actions */}
         <div className="fixed bottom-8 right-[320px] bg-slate-800/80 backdrop-blur-md p-2 rounded-full border border-slate-600 flex gap-2 shadow-2xl z-20">
           <button 
             onClick={() => checkSubscriptionAction(() => setIsTemplateManagerOpen(true))} 
@@ -1722,7 +1752,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           }}
         >
           <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
-            <RibbonCanvas 
+            <RibbonCanvas
               text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
               width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
               rotatedIds={leftRotated} onCharClick={() => {}}
@@ -1731,7 +1761,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           </div>
           {/* Middle Connection Line */}
           <div style={{ width: `${(width - lace*2) * 2}px`, height: '4px', backgroundColor: 'black' }} />
-          <RibbonCanvas 
+          <RibbonCanvas
             text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={rightRotated} onCharClick={() => {}}
@@ -1741,7 +1771,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
         {/* 2. Separate Mode (Both rotated 180 as per user drawing) */}
         <div ref={separateLeftRef} style={{ backgroundColor: 'white', transform: 'rotate(180deg)' }}>
-          <RibbonCanvas 
+          <RibbonCanvas
             text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={leftRotated} onCharClick={() => {}}
@@ -1779,6 +1809,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 <p className="text-slate-500 text-xs mt-1">11% 할인</p>
               </div>
               <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600 hover:border-blue-500 cursor-pointer transition">
+                <p className="text-lg font-semibold text-white">12개월</p>
                 <p className="text-blue-400 font-semibold text-xl mt-1">₩269,900</p>
                 <p className="text-slate-500 text-xs mt-1">25% 할인</p>
               </div>
@@ -1793,6 +1824,88 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           </div>
         </div>
       )}
+
+      <SaveConfigDialog 
+        isOpen={isSaveDialogOpen}
+        onClose={() => setIsSaveDialogOpen(false)}
+        onSave={async (name: string) => {
+          const { error } = await supabase.from('saved_configs').insert({
+            user_id: session?.user.id,
+            name,
+            config: currentConfig
+          });
+          if (error) alert('저장 실패: ' + error.message);
+          else {
+            alert('저장되었습니다!');
+            setIsSaveDialogOpen(false);
+          }
+        }}
+      />
+
+      <LoadConfigDialog 
+        isOpen={isLoadDialogOpen}
+        onClose={() => setIsLoadDialogOpen(false)}
+        onLoad={onLoadConfig}
+        userId={session?.user.id}
+      />
+    </div>
+  );
+}
+
+// Internal Components that were lost:
+
+function SaveConfigDialog({ isOpen, onClose, onSave }: { isOpen: boolean, onClose: () => void, onSave: (name: string) => void }) {
+  const [name, setName] = useState('');
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[300]">
+      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 w-full max-w-sm">
+        <h3 className="text-lg font-bold text-white mb-4">현재 작업 저장</h3>
+        <input 
+          type="text" 
+          value={name} 
+          onChange={e => setName(e.target.value)}
+          placeholder="템플릿 이름 입력"
+          className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white mb-4 outline-none focus:ring-1 ring-blue-500"
+        />
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded">취소</button>
+          <button onClick={() => { onSave(name); setName(''); }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded">저장</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoadConfigDialog({ isOpen, onClose, onLoad, userId }: { isOpen: boolean, onClose: () => void, onLoad: (config: any) => void, userId?: string }) {
+  const [configs, setConfigs] = useState<any[]>([]);
+  useEffect(() => {
+    if (isOpen && userId) {
+      supabase.from('saved_configs').select('*').eq('user_id', userId).order('created_at', { ascending: false })
+        .then(({ data }) => setConfigs(data || []));
+    }
+  }, [isOpen, userId]);
+
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[300]">
+      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 w-full max-w-sm">
+        <h3 className="text-lg font-bold text-white mb-4">저장된 템플릿</h3>
+        <div className="max-h-60 overflow-y-auto space-y-2 mb-4">
+          {configs.map(c => (
+            <button 
+              key={c.id} 
+              onClick={() => { onLoad(c.config); onClose(); }}
+              className="w-full p-3 bg-slate-900 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded text-left transition-all"
+            >
+              <div className="text-sm font-semibold text-white">{c.name}</div>
+              <div className="text-[10px] text-slate-500">{new Date(c.created_at).toLocaleString()}</div>
+            </button>
+          ))}
+          {configs.length === 0 && <div className="text-center py-4 text-slate-500">저장된 내역이 없습니다.</div>}
+        </div>
+        <button onClick={onClose} className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded">닫기</button>
+      </div>
     </div>
   );
 }
