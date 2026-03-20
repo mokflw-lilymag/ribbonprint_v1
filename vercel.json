@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd ribbon-web && npm run build",
-  "installCommand": "cd ribbon-web && npm install",
-  "outputDirectory": "ribbon-web/dist",
-  "framework": "vite"
-}
