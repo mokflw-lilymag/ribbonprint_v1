@@ -17,7 +17,9 @@ import {
 } from 'lucide-react';
 import { FontManagerDialog } from './FontManagerDialog';
 import { TemplateManagerDialog } from './TemplateManagerDialog';
-import { FolderOpen } from 'lucide-react';
+import { PhraseManagerDialog } from './PhraseManagerDialog';
+import { FolderOpen, Settings as SettingsIcon } from 'lucide-react';
+import { supabase } from './lib/supabase';
 import { type CustomFontInfo, getAllCustomFonts, getHiddenFonts } from './lib/font-store';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -144,11 +146,11 @@ const RIBBON_TYPES = [
   { id: 'celebration_3', name: '축화 3단 165x2200mm', width: 165, lace: 23, length: 2200, marginTop: 400, marginBottom: 300, fontSize: 130 },
 ];
 
-const PHRASE_CATEGORIES = [
+const DEFAULT_PHRASE_CATEGORIES = [
   {
-    name: '🎂 생일/회갑/칠순',
+    name: '🎉 환갑/칠순/팔순/행사',
     phrases: [
-      { text: '祝生日', desc: '축생일' }, { text: '祝生辰', desc: '축생신' }, { text: '祝華甲', desc: '축화갑(60)' },
+      { text: '祝生日', desc: '축생일' }, { text: '祝생辰', desc: '축생신' }, { text: '祝華甲', desc: '축화갑(60)' },
       { text: '祝壽宴', desc: '축수연(60)' }, { text: '祝回甲', desc: '축회갑(60)' }, { text: '祝古稀', desc: '축고희(70)' },
       { text: '祝七旬', desc: '축칠순(70)' }, { text: '祝喜壽', desc: '축희수(77)' }, { text: '祝八旬', desc: '축팔순(80)' },
       { text: '祝傘壽', desc: '축산수(80)' }, { text: '祝米壽', desc: '축미수(88)' }, { text: '祝白壽', desc: '축백수(99)' },
@@ -788,6 +790,46 @@ export default function App() {
   const [customStyles, setCustomStyles] = useState<{id: string, css: string}[]>([]);
   const [isFontManagerOpen, setIsFontManagerOpen] = useState(false);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
+  const [isPhraseManagerOpen, setIsPhraseManagerOpen] = useState(false);
+  const [phraseCategories, setPhraseCategories] = useState(DEFAULT_PHRASE_CATEGORIES);
+
+  const loadCustomPhrases = async () => {
+    try {
+      const { data, error } = await supabase.from('custom_phrases').select('*');
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        setPhraseCategories(DEFAULT_PHRASE_CATEGORIES);
+        return;
+      }
+
+      // Merge defaults with custom phrases
+      const grouped = new Map();
+      DEFAULT_PHRASE_CATEGORIES.forEach(cat => grouped.set(cat.name, [...cat.phrases]));
+
+      data.forEach((p: any) => {
+        const catName = p.category;
+        if (!grouped.has(catName)) {
+          grouped.set(catName, []);
+        }
+        grouped.get(catName).push({ text: p.text, desc: p.description || '' });
+      });
+
+      const merged = Array.from(grouped.entries()).map(([name, phrases]) => ({ name, phrases }));
+      setPhraseCategories(merged);
+
+      // Adjust selection if the current category index is out of bounds
+      setPhraseCategory(prev => prev >= merged.length ? 0 : prev);
+
+    } catch (err) {
+      console.error('Error loading custom phrases:', err);
+      setPhraseCategories(DEFAULT_PHRASE_CATEGORIES);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomPhrases();
+  }, []);
 
   const loadFontSettings = async () => {
     const hidden = getHiddenFonts();
@@ -1499,27 +1541,32 @@ export default function App() {
         
         <div>
           <div className="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
-             <h2 className="text-sm font-bold text-slate-300">자주 쓰는 상용구</h2>
+             <div className="flex items-center gap-2">
+               <h2 className="text-sm font-bold text-slate-300">자주 쓰는 상용구</h2>
+               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="상용구 관리 (DB)">
+                 <SettingsIcon size={14} />
+               </button>
+             </div>
              <select 
                value={phraseCategory} 
                onChange={e => setPhraseCategory(Number(e.target.value))}
-               className="bg-slate-800 text-[10px] border-none rounded px-2 py-1 outline-none focus:ring-1 ring-blue-500 text-slate-300"
+               className="bg-slate-800 text-[10px] border-none rounded px-2 py-1 outline-none focus:ring-1 ring-blue-500 text-slate-300 max-w-[120px]"
              >
-               {PHRASE_CATEGORIES.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
+               {phraseCategories.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
              </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {PHRASE_CATEGORIES[phraseCategory].phrases.map((item, idx) => (
+            {phraseCategories[phraseCategory]?.phrases.map((item, idx) => (
                <button 
                  key={idx} 
                  onClick={() => {
                    if (activeSide === 'left') setLeftText(item.text);
                    else setRightText(item.text);
                  }}
-                 className="group bg-slate-800 hover:bg-blue-900/30 border border-slate-700 hover:border-blue-500 rounded p-2 transition-all flex flex-col items-center justify-center min-h-[50px]"
+                 className="group bg-slate-800 hover:bg-blue-900/30 border border-slate-700 hover:border-blue-500 rounded p-2 transition-all flex flex-col items-center justify-center min-h-[50px] overflow-hidden"
                >
-                 <span className="text-[12px] font-bold text-slate-200 mb-0.5 leading-tight">{item.text}</span>
-                 <span className="text-[9px] text-slate-500 group-hover:text-blue-300">{item.desc}</span>
+                 <span className="text-[12px] font-bold text-slate-200 mb-0.5 leading-tight truncate w-full text-center">{item.text}</span>
+                 <span className="text-[9px] text-slate-500 group-hover:text-blue-300 truncate w-full text-center">{item.desc}</span>
                </button>
             ))}
           </div>
@@ -1567,6 +1614,13 @@ export default function App() {
         }} 
         baseFonts={FONTS}
         onSettingsChanged={loadFontSettings}
+      />
+
+      {/* Phrase Manager Dialog */}
+      <PhraseManagerDialog
+        isOpen={isPhraseManagerOpen}
+        onClose={() => setIsPhraseManagerOpen(false)}
+        onChanged={loadCustomPhrases}
       />
 
       {/* Template Manager Dialog */}
