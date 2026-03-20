@@ -4,7 +4,6 @@ import { LogOut } from 'lucide-react';
 import { 
   Printer, 
   Settings, 
-  Ruler, 
   Type,
   Maximize2,
   Minimize2,
