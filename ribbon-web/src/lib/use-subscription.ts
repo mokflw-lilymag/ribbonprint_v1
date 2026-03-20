@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 
 export interface SubscriptionInfo {
-  plan: 'free' | 'monthly' | 'quarterly' | 'yearly';
+  plan: 'free' | 'monthly' | 'quarterly' | 'half_yearly' | 'yearly' | 'event';
   status: 'active' | 'expired' | 'cancelled' | 'trial';
   expiresAt: string | null;
   daysRemaining: number;

@@ -736,6 +736,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const { subscription, loading: subLoading } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
 
+  const checkSubscriptionAction = (action: () => void) => {
+    if (isAdmin || subscription.isActive) {
+      action();
+    } else {
+      setShowPaywall(true);
+    }
+  };
+
   // Printer State
   const [printers, setPrinters] = useState<any[]>([]);
   const [selectedPrinter, setSelectedPrinter] = useState('');
@@ -1087,14 +1095,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     <div className="flex bg-slate-900 text-slate-200 h-screen w-screen overflow-hidden text-sm">
       
       {/* 1. Left Panel: Settings */}
-      <aside className="w-80 glass-panel flex flex-col shrink-0 z-10 p-5 overflow-y-auto space-y-6">
+      <aside className="hidden lg:flex w-80 glass-panel flex flex-col shrink-0 z-10 p-5 overflow-y-auto space-y-6">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <h1 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
-              <Ruler size={24} className="text-blue-500" />
-              RibbonMaker PRO
+            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
+              RibbonMaker <span className="text-blue-500">PRO</span>
             </h1>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               {isAdmin && (
                 <button
                   onClick={onShowAdmin}
@@ -1112,13 +1119,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
             </div>
           </div>
-          <p className="text-xs text-slate-400 font-mono">Build 2026.03 (Full-Fit Engine)</p>
+          <p className="text-[10px] text-slate-400 font-mono">Build 2026.03 (Full-Fit Engine)</p>
           {session?.user?.email && (
-            <p className="text-[11px] text-blue-400/80 mt-1 truncate" title={session.user.email}>👤 {session.user.email}</p>
+            <p className="text-[10px] text-blue-400/80 mt-1 truncate" title={session.user.email}>👤 {session.user.email}</p>
           )}
           {/* Subscription Badge */}
           {!subLoading && (
-            <div className={`mt-2 px-3 py-1.5 rounded-lg text-xs font-medium text-center border tracking-wide ${
+            <div className={`mt-2 px-2 py-1 rounded-lg text-[10px] font-medium text-center border tracking-wide ${
               isAdmin
                 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                 : subscription.isActive 
@@ -1126,11 +1133,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                   : 'bg-red-500/15 text-red-400 border-red-500/30'
             }`}>
               {isAdmin
-                ? '🛡️ 관리자 - 모든 기능 사용 가능'
+                ? '🛡️ 관리자 - 모든 기능 가능'
                 : subscription.isActive 
-                  ? `✅ ${subscription.plan === 'monthly' ? '월간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'yearly' ? '연간' : ''} 구독 활성 (D-${subscription.daysRemaining})`
-                  : '⚠️ 구독 만료 - 인쇄 기능 제한'
-              }
+                  ? `✅ ${subscription.plan === 'yearly' ? '연간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'half_yearly' ? '6개월' : subscription.plan === 'event' ? '이벤트' : '월간'} 구독중`
+                  : '🔓 무료 체험 중 (인쇄 제한)'}
             </div>
           )}
         </div>
@@ -1566,7 +1572,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         {/* Floating Actions */}
         <div className="fixed bottom-8 right-[320px] bg-slate-800/80 backdrop-blur-md p-2 rounded-full border border-slate-600 flex gap-2 shadow-2xl z-20">
           <button 
-            onClick={() => setIsTemplateManagerOpen(true)} 
+            onClick={() => checkSubscriptionAction(() => setIsTemplateManagerOpen(true))} 
             className="p-2 rounded-full hover:bg-slate-700 text-amber-400 transition-colors flex items-center gap-2 px-4 whitespace-nowrap"
           >
             <FolderOpen size={18} />
@@ -1589,8 +1595,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <button onClick={() => setZoom(z => Math.min(2.0, z + 0.1))} className="p-2 hover:bg-slate-700 rounded-full transition-colors"><Maximize2 size={18} /></button>
           <div className="w-px h-6 bg-slate-600 my-auto mx-1"></div>
           <button 
+            onClick={() => checkSubscriptionAction(handlePrint)}
             disabled={isPrinting}
-            onClick={handlePrint}
             className={cn(
               "flex items-center gap-2 px-6 py-2 rounded-full font-bold transition-all shadow-lg",
               isPrinting ? "bg-slate-600 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white"
