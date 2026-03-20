@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&family=Black+Han+Sans&family=East+Sea+Dokdo&family=Song+Myung&family=Gowun+Batang:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=LXGW+WenKai+Mono+TC:wght@400;700&family=Klee+One:wght@400;600&family=Yuji+Syuku&family=Yuji+Boku&family=Yuji+Mai&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=UoqMunThenKhung&family=Iansui&family=Kaisei+HarunoUmi:wght@400;700&family=Zen+Antique+Soft&display=swap');
 
 @theme {
   --color-brand: #3b82f6;
@@ -8,11 +12,6 @@
   --color-surface-hover: #334155;
   --color-border-subtle: rgba(255, 255, 255, 0.1);
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@400;500;700;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&family=Black+Han+Sans&family=East+Sea+Dokdo&family=Song+Myung&family=Gowun+Batang:wght@400;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=LXGW+WenKai+Mono+TC:wght@400;700&family=Klee+One:wght@400;600&family=Yuji+Syuku&family=Yuji+Boku&family=Yuji+Mai&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=UoqMunThenKhung&family=Iansui&family=Kaisei+HarunoUmi:wght@400;700&family=Zen+Antique+Soft&display=swap');
 
 @font-face {
   font-family: 'JoseonPalace';
