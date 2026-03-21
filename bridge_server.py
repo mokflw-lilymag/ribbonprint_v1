@@ -3,10 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import logging
+import os
+import tempfile
 from typing import Optional, List, Dict
+import threading
+import time
 
 # 기존 브릿지 모듈 임포트
 from printer_bridge import RibbonPrinterBridge, PrinterManager
+from print_agent import CloudPrintAgent, get_user_id, set_user_id
 
 
 # -----------------------------------------------------
@@ -31,6 +36,25 @@ app.add_middleware(
 # 전역 상태 (PrinterManager 인스턴스 싱글톤 유지)
 # -----------------------------------------------------
 printer_manager = PrinterManager()
+cloud_agent = None
+cloud_agent_thread = None
+
+def start_cloud_agent():
+    global cloud_agent, cloud_agent_thread
+    uid = get_user_id()
+    if uid:
+        logger.info(f"Starting cloud print background agent for user: {uid}")
+        if not cloud_agent:
+            cloud_agent = CloudPrintAgent()
+        
+        if not cloud_agent_thread or not cloud_agent_thread.is_alive():
+            cloud_agent_thread = threading.Thread(target=cloud_agent.run, daemon=True)
+            cloud_agent_thread.start()
+    else:
+        logger.info("No user ID found for auto-pairing. Waiting for web app connection...")
+
+# Call on startup
+start_cloud_agent()
 
 
 # -----------------------------------------------------
@@ -46,6 +70,9 @@ class PrintImageRequest(BaseModel):
     width_mm: float
     length_mm: float
     media_type: Optional[str] = "roll" # "roll" or "cut"
+
+class AutoPairRequest(BaseModel):
+    user_id: str
 
 # -----------------------------------------------------
 # HTTP 엔드포인트
@@ -104,6 +131,22 @@ def submit_print_image(job: PrintImageRequest):
             
     except Exception as e:
         logger.error(f"Error during image print: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/pair")
+def pair_bridge_agent(req: AutoPairRequest):
+    """로컬 브릿지와 현재 로그인한 사용자를 자동 연결합니다."""
+    try:
+        current_uid = get_user_id()
+        if current_uid != req.user_id:
+            logger.info(f"Pairing bridge to new user ID: {req.user_id}")
+            set_user_id(req.user_id)
+            if cloud_agent:
+                cloud_agent.user_id = req.user_id
+            start_cloud_agent()
+        return {"status": "success", "message": "Bridge is automatically paired."}
+    except Exception as e:
+        logger.error(f"Auto pair failed: {e}")
         return {"status": "error", "message": str(e)}
 
 

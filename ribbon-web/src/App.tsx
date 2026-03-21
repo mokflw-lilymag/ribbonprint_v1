@@ -938,7 +938,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         }
       })
       .catch(err => console.error("Failed to fetch printers", err));
-  }, []);
+
+    // Auto-Pair Cloud Print Agent with Local Bridge
+    if (session?.user?.id) {
+       fetch('http://localhost:8000/api/pair', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ user_id: session.user.id })
+       }).catch(err => {
+         // Silently fail if local bridge is not running (e.g. on mobile remote usage)
+       });
+    }
+  }, [session?.user?.id]);
+
 
   const handlePrint = async () => {
     // 구독 상태 확인 (관리자는 항상 허용)
@@ -963,22 +975,45 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           backgroundColor: '#ffffff',
         });
 
-        const response = await fetch('http://localhost:8000/api/print_image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            printer_name: selectedPrinter,
-            image_base64: dataUrl,
-            width_mm: w,
-            length_mm: h,
-            media_type: mediaType
-          }),
+        // 1. Try Local Bridge first (Fastest)
+        try {
+          const response = await fetch('http://localhost:8000/api/print_image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              printer_name: selectedPrinter,
+              image_base64: dataUrl,
+              width_mm: w,
+              length_mm: h,
+              media_type: mediaType
+            }),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.status === 'success') return; // Local print ok
+          }
+        } catch (err) {
+          console.log("Local bridge not found, falling back to Cloud Relay...");
+        }
+
+        // 2. Cloud Relay Fallback (For Mobile or Remote)
+        if (!session?.user?.id) throw new Error("인쇄를 위해 로그인이 필요합니다.");
+
+        const { error: cloudError } = await supabase.from('print_jobs').insert({
+          user_id: session.user.id,
+          printer_name: selectedPrinter,
+          image_base64: dataUrl,
+          width_mm: w,
+          length_mm: h,
+          status: 'pending'
         });
 
-        const result = await response.json();
-        if (result.status !== 'success') {
-          throw new Error(`${label} 인쇄 실패: ${result.message}`);
+        if (cloudError) {
+          throw new Error(`클라우드 출력 전송 실패: ${cloudError.message}`);
         }
+        
+        console.log("Cloud print job queued successfully.");
       };
 
       if (printTarget === 'left') {
