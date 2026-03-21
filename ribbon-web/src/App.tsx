@@ -10,6 +10,8 @@ import {
   RotateCw,
   Undo2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Search,
   Check,
   Wrench,
@@ -736,7 +738,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   // Subscription State
   const { subscription, loading: subLoading } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false); // Default to false as requested
 
   const checkSubscriptionAction = (action: () => void) => {
     if (isAdmin || subscription.isActive) {
@@ -783,7 +786,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [leftSpacing, setLeftSpacing] = useState(0); // 0 = auto
 
   // Right Ribbon State
-  const [rightText, setRightText] = useState('(주)디자인스튜디오 대표이사 [홍길동]');
+  const [rightText, setRightText] = useState('(주)릴리맥플라워랩 [CEO] 홍길동');
   const [rightFontConfig, setRightFontConfig] = useState<FontConfig>({
     ko: 'font-chosun',
     en: 'font-chosun',
@@ -813,6 +816,39 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
   const [phraseCategories, setPhraseCategories] = useState(DEFAULT_PHRASE_CATEGORIES);
+
+  // Panning State
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [startY, setStartY] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Only drag if clicking the background main area or canvas holder (not buttons/inputs)
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) return;
+
+    if (!mainRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - mainRef.current.offsetLeft);
+    setStartY(e.pageY - mainRef.current.offsetTop);
+    setScrollLeft(mainRef.current.scrollLeft);
+    setScrollTop(mainRef.current.scrollTop);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !mainRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - mainRef.current.offsetLeft;
+    const y = e.pageY - mainRef.current.offsetTop;
+    const walkX = (x - startX);
+    const walkY = (y - startY);
+    mainRef.current.scrollLeft = scrollLeft - walkX;
+    mainRef.current.scrollTop = scrollTop - walkY;
+  };
+
+  const stopDragging = () => setIsDragging(false);
 
   const loadCustomPhrases = async () => {
     try {
@@ -1002,16 +1038,24 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     return extendedFonts.filter(f => !hiddenFonts.includes(f.value));
   }, [extendedFonts, hiddenFonts]);
 
-  // Auto-Zoom Calculation
+  // Auto-Zoom Calculation (Runs on major layout changes only)
   useEffect(() => {
     if (mainRef.current && length > 0) {
-      const availableH = mainRef.current.clientHeight - 100; // top/bottom padding 50px each
-      const targetH = length * 2; // using scaleRatio = 2 internally relative to mm lengths
-      if (targetH > 0) {
-        setZoom(Math.min(2.0, availableH / targetH));
+      const padX = 20;
+      const padY = 40;
+      const availableH = mainRef.current.clientHeight - padY * 2;
+      const availableW = mainRef.current.clientWidth - padX * 2;
+      
+      const targetH = length * 2;
+      const targetW = width * 2;
+      
+      if (targetH > 0 && targetW > 0 && availableH > 0 && availableW > 0) {
+        const zoomH = availableH / targetH;
+        const zoomW = availableW / targetW;
+        setZoom(Math.min(1.5, zoomH, zoomW));
       }
     }
-  }, [length, ribbonType]); // re-run when content changes
+  }, [isSidebarOpen, isRightPanelOpen]); // Re-fit when side panels toggle
 
   useEffect(() => {
     const defaultSpecs = RIBBON_TYPES.find(t => t.id === ribbonType);
@@ -1021,6 +1065,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       setLength(defaultSpecs.length);
       setMarginTop(defaultSpecs.marginTop); 
       setMarginBottom(defaultSpecs.marginBottom);
+      
+      // Auto-fit on type change
+      if (mainRef.current) {
+        const padX = 20;
+        const padY = 40;
+        const availableH = mainRef.current.clientHeight - padY * 2;
+        const availableW = mainRef.current.clientWidth - padX * 2;
+        const targetH = defaultSpecs.length * 2;
+        const targetW = defaultSpecs.width * 2;
+        if (targetH > 0 && targetW > 0 && availableH > 0 && availableW > 0) {
+           setZoom(Math.min(1.5, availableH / targetH, availableW / targetW));
+        }
+      }
     }
   }, [ribbonType]);
 
@@ -1098,28 +1155,33 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   return (
     <div className="flex bg-slate-900 text-slate-200 h-screen w-screen overflow-hidden text-sm">
       
-      {/* 1. Left Panel: Settings (Mobile Drawer) */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      {/* 1. Left Panel: Config Sidebar (Mobile/Desktop Sync) */}
       <aside className={cn(
-        "fixed lg:static inset-y-0 left-0 w-80 glass-panel flex flex-col shrink-0 z-50 p-5 overflow-y-auto space-y-6 transition-transform duration-300",
-        isSidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full lg:translate-x-0 lg:flex"
+        "glass-panel relative lg:sticky top-0 left-0 bottom-0 h-full shrink-0 z-40 p-4 lg:p-5 overflow-y-auto border-r border-slate-700 transition-all duration-300 transform-gpu bg-slate-900/95 lg:bg-transparent",
+        isSidebarOpen 
+          ? "w-[260px] sm:w-72 lg:w-80 translate-x-0" 
+          : "w-0 p-0 overflow-hidden border-none -translate-x-10 lg:absolute lg:opacity-0"
       )}>
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
-            RibbonMaker <span className="text-blue-500">PRO</span>
-          </h1>
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
+              RibbonMaker <span className="text-blue-500">PRO</span>
+            </h1>
             <button 
-              className="lg:hidden p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"
               onClick={() => setIsSidebarOpen(false)}
+              className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition"
+              title="메뉴 닫기"
             >
-              <X size={20} />
+              <ChevronLeft size={18} />
             </button>
+          </div>
+            <div className="flex items-center gap-1.5">
+              <button 
+                className="lg:hidden p-1.5 rounded-lg bg-slate-700 text-white"
+                onClick={() => setIsSidebarOpen(false)}
+              >
+                <X size={20} />
+              </button>
             {isAdmin && (
               <button
                 onClick={onShowAdmin}
@@ -1308,7 +1370,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             type="text"
             value={leftText} 
             onChange={e => setLeftText(e.target.value)}
-            onFocus={() => setActiveSide('left')}
+            onFocus={() => {
+              setActiveSide('left');
+              setIsRightPanelOpen(true); // Open bank panel when editing text
+            }}
             className="w-full p-2 rounded-lg text-sm leading-tight focus:ring-2 bg-slate-800 border-slate-700 text-white outline-none"
             placeholder="경조사 입력"
           />
@@ -1406,7 +1471,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             type="text"
             value={rightText} 
             onChange={e => setRightText(e.target.value)}
-            onFocus={() => setActiveSide('right')}
+            onFocus={() => {
+              setActiveSide('right');
+              setIsRightPanelOpen(true); // Open bank panel when editing text
+            }}
             className="w-full p-2 rounded-lg text-sm leading-tight focus:ring-2 bg-slate-800 border-slate-700 text-white outline-none"
             placeholder="보내는이 입력"
           />
@@ -1476,32 +1544,77 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       </aside>
 
       {/* 2. Center Panel: Canvas */}
-      <main ref={mainRef} className="flex-1 relative overflow-auto p-4 sm:p-12 bg-[#0f172a] min-w-0 transition-all duration-300">
-        {/* Mobile Menu Toggle Floating Button */}
-        <button 
-          onClick={() => setIsSidebarOpen(true)}
-          className="lg:hidden fixed top-4 left-4 z-30 p-2.5 bg-blue-600/90 text-white rounded-xl shadow-lg shadow-blue-900/40 backdrop-blur hover:bg-blue-500 transition active:scale-95"
-          title="메뉴 열기"
-        >
-          <Menu size={24} />
-        </button>
+      <main 
+        ref={mainRef} 
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={stopDragging}
+        onMouseLeave={stopDragging}
+        className={cn(
+          "flex-1 relative overflow-auto p-4 sm:p-12 bg-[#0f172a] min-w-0 transition-all duration-300",
+          isSidebarOpen ? "lg:ml-0" : "ml-0",
+          isRightPanelOpen ? "lg:mr-0" : "mr-0",
+          isDragging ? "cursor-grabbing" : "cursor-grab"
+        )}
+      >
+        {/* Ribbon Layout Management Buttons (Panel Toggles) */}
+        {!isSidebarOpen && (
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="fixed top-1/2 left-0 -translate-y-1/2 z-[45] p-2.5 bg-blue-600 text-white rounded-r-xl shadow-lg border-y border-r border-blue-400/50 hover:bg-blue-500 transition-all active:scale-95 group"
+            title="설정 메뉴 열기"
+          >
+            <ChevronRight size={24} className="group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        )}
+        {!isRightPanelOpen && (
+          <button 
+            onClick={() => setIsRightPanelOpen(true)}
+            className="fixed top-1/2 right-0 -translate-y-1/2 z-[45] flex flex-col items-center py-5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-l-2xl shadow-2xl border-y border-l border-blue-400/50 transition-all active:scale-95 group"
+            title="경조사어·상용구 메뉴 열기"
+          >
+            <ChevronLeft size={20} className="mb-4 group-hover:-translate-x-1 transition-transform" />
+            <div className="flex flex-col items-center gap-0.5 select-none">
+              {"경조사어·상용구 선택".split('').map((char, i) => (
+                <span key={i} className="text-[11px] font-black text-blue-50/90 leading-none">
+                  {char}
+                </span>
+              ))}
+            </div>
+          </button>
+        )}
 
-        <div className="flex justify-center items-start min-h-full py-8 lg:py-0">
-        {/* Design Canvas Area */}
+        {/* Mobile Menu Toggle Floating Button (Legacy, keep but adjust) */}
+        {!isSidebarOpen && (
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="lg:hidden fixed top-4 left-4 z-30 p-2.5 bg-blue-600/90 text-white rounded-xl shadow-lg shadow-blue-900/40 backdrop-blur hover:bg-blue-500 transition active:scale-95"
+            title="메뉴 열기"
+          >
+            <Menu size={24} />
+          </button>
+        )}
+
+        <div className="inline-flex min-w-full min-h-full items-start justify-center py-8 lg:py-12 select-none">
+        {/* Design Canvas Area Wrapper to handle Scroll with Zoom */}
         <div 
-          className={cn(
-            "flex transition-all duration-300 transform-gpu mx-auto w-max origin-top",
-            isPreviewMode ? "gap-4 flex-col items-center" : "gap-24"
-          )} 
+          className="relative transition-all duration-300 transform-gpu"
           style={{ 
             transform: `scale(${zoom})`, 
             transformOrigin: 'top center',
-            backgroundColor: isPreviewMode ? '#1e293b' : 'transparent',
-            padding: isPreviewMode ? '20px' : '0',
-            borderRadius: isPreviewMode ? '20px' : '0',
-            border: isPreviewMode ? '1px dashed #475569' : 'none'
+            // Accurate sizing to fix scrollbars:
+            // We need to set the parent's layout size to the SCALED size.
+            // But we do it via padding/margins to the inner relative container.
+            width: isPreviewMode ? `${(width * 2) * zoom}px` : `${((width * 4) + 100) * zoom}px`, // approximate for double ribbon
+            height: `${(length * 2) * zoom}px`,
+            marginBottom: '100px'
           }}
         >
+          <div className={cn(
+            "flex absolute top-0 left-1/2 -translate-x-1/2 transition-all duration-300",
+            isPreviewMode ? "gap-4 flex-col items-center" : "flex-col lg:flex-row gap-12 lg:gap-24 items-center",
+            isPreviewMode && "bg-slate-800/40 p-10 rounded-3xl border border-slate-700/50 backdrop-blur"
+          )}>
           {isPreviewMode ? (
             // ================= PREVIEW MODE =================
             <div className="flex flex-col items-center">
@@ -1597,9 +1710,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           )}
         </div>
       </div>
+    </div>
 
-      {/* Floating Actions */}
-        <div className="fixed bottom-8 right-[320px] bg-slate-800/80 backdrop-blur-md p-2 rounded-full border border-slate-600 flex gap-2 shadow-2xl z-20">
+      {/* Floating Actions Toolbar */}
+        <div className={cn(
+          "fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-xl p-2 rounded-full border border-slate-600/50 flex gap-1 sm:gap-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[60] transition-all duration-300",
+          isRightPanelOpen && "lg:right-80 lg:left-auto lg:translate-x-0"
+        )}>
           <button 
             onClick={() => checkSubscriptionAction(() => setIsTemplateManagerOpen(true))} 
             className="p-2 rounded-full hover:bg-slate-700 text-amber-400 transition-colors flex items-center gap-2 px-4 whitespace-nowrap"
@@ -1642,9 +1759,22 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       </main>
 
       {/* 3. Right Panel: Banks */}
-      <aside className="w-[280px] glass-panel shrink-0 z-10 p-5 overflow-y-auto space-y-6">
-        
-        <div>
+      <aside className={cn(
+        "glass-panel fixed lg:sticky top-0 right-0 bottom-0 h-full shrink-0 z-30 p-5 overflow-y-auto space-y-6 border-l border-slate-700 transition-all duration-300 transform-gpu bg-slate-900/95 lg:bg-transparent",
+        isRightPanelOpen 
+          ? "w-[260px] sm:w-72 lg:w-80 translate-x-0" 
+          : "w-0 p-0 overflow-hidden border-none translate-x-full lg:absolute lg:opacity-0"
+      )}>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">데이터 뱅크</h3>
+          <button 
+            onClick={() => setIsRightPanelOpen(false)}
+            className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition"
+            title="뱅크 닫기"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
           <div className="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
              <div className="flex items-center gap-2">
                <h3 className="text-xs font-semibold text-slate-400">자주 쓰는 상용구</h3>
@@ -1675,7 +1805,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                </button>
             ))}
           </div>
-        </div>
+
 
         <div>
           <h3 className="text-xs font-semibold text-slate-400">특수기호 (Click to Insert)</h3>
