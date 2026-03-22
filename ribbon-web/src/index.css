@@ -21,13 +21,7 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'ZiHunJinLing';
-  src: url('/fonts/ZiHunJinLing.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+
 
 :root {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -137,4 +131,3 @@ input[type="number"] {
 .font-hj-mai { font-family: 'Yuji Mai', serif; }
 .font-hj-kaisei { font-family: 'Kaisei HarunoUmi', serif; }
 .font-hj-zen { font-family: 'Zen Antique Soft', serif; }
-.font-hj-zihun { font-family: 'ZiHunJinLing', cursive; } /* Custom Local Font: 字小魂金陵手书 */

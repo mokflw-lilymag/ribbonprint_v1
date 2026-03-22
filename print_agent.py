@@ -58,9 +58,11 @@ class CloudPrintAgent:
             logger.error(f"Error fetching jobs: {e}")
         return []
 
-    def update_job_status(self, job_id, status, error=None):
+    def update_job_status(self, job_id, status, error=None, clear_image=False):
         url = f"{SUPABASE_URL}/rest/v1/print_jobs?id=eq.{job_id}"
         payload = {"status": status, "error_message": error}
+        if clear_image:
+            payload["image_base64"] = ""
         try:
             requests.patch(url, headers=self.headers, json=payload)
         except Exception as e:
@@ -99,8 +101,8 @@ class CloudPrintAgent:
             })
             
             if res:
-                self.update_job_status(job_id, 'completed')
-                logger.info(f"Job {job_id} completed successfully.")
+                self.update_job_status(job_id, 'completed', clear_image=True)
+                logger.info(f"Job {job_id} completed successfully. Image data cleared.")
             else:
                 raise Exception("Printing failed in bridge driver.")
 

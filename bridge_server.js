@@ -40,7 +40,16 @@ app.get('/api/printers', (req, res) => {
 });
 
 /**
- * 2. High Performance Ribbon Printing via Native EXE agent
+ * 2. Auto-Pairing (Silences 404 errors from UI)
+ */
+app.post('/api/pair', (req, res) => {
+  // Currently frontend sends user_id to auto-pair.
+  // In the JS native hybrid, we might use this later.
+  res.json({ status: 'success', message: 'Paired ok' });
+});
+
+/**
+ * 3. High Performance Ribbon Printing via Native EXE agent
  */
 app.post('/api/print_image', async (req, res) => {
   const { printer_name, image_base64, width_mm, length_mm } = req.body;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import { 
   Shield, Users, CreditCard, BarChart3, Plus, 
-  ArrowLeft, Search, Calendar, Printer, RefreshCw 
+  ArrowLeft, Search, Calendar, Printer, RefreshCw, Key, Mail, Trash2
 } from 'lucide-react';
 
 interface Profile {
@@ -97,6 +97,55 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   const isSubActive = (sub?: Subscription): boolean => {
     if (!sub || !sub.expires_at) return false;
     return new Date(sub.expires_at) > new Date() && sub.status === 'active';
+  };
+
+  const handleResetPasswordEmail = async (email: string) => {
+    if (!confirm(`${email} 사용자에게 비밀번호 초기화 메일을 발송하시겠습니까?`)) return;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) alert('메일 발송 실패: ' + error.message);
+      else alert('비밀번호 초기화 메일이 성공적으로 발송되었습니다.');
+    } catch (e: any) {
+      alert('오류 발생: ' + e.message);
+    }
+  };
+
+  const handleForceResetPassword = async (userId: string, email: string) => {
+    const newPassword = prompt(`[관리자 강제변경]\n\n${email} 사용자의 새로운 6자리 이상 비밀번호를 입력해주세요.`);
+    if (!newPassword || newPassword.trim() === '') return;
+    
+    if (newPassword.length < 6) {
+      alert('비밀번호는 최소 6자리 이상이어야 합니다.');
+      return;
+    }
+
+    if (!confirm(`정말 ${email}의 비밀번호를 '${newPassword}'로 강제 변경하시겠습니까?`)) return;
+
+    try {
+      const { error } = await supabase.rpc('admin_reset_password', {
+        user_uid: userId,
+        new_password: newPassword
+      });
+
+      if (error) alert('강제 변경 실패: ' + error.message);
+      else alert('비밀번호 강제 변경이 성공적으로 완료되었습니다.');
+    } catch (e: any) {
+      alert('오류 발생: ' + e.message);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, email: string) => {
+    const promptText = prompt(`[경고: 데이터 영구 삭제]\n\n정말 ${email} 회원을 강제로 탈퇴시키겠습니까? 관련된 인쇄 기록 등 모든 데이터가 복구 불가능하게 영구 삭제됩니다.\n\n진행하시려면 '강제탈퇴'를 입력하세요.`);
+    if (promptText !== '강제탈퇴') return;
+
+    try {
+      const { error } = await supabase.rpc('admin_delete_user', { target_uid: userId });
+      if (error) throw error;
+      alert('회원 강제 탈퇴가 성공적으로 완료되었습니다.');
+      loadData();
+    } catch (err: any) {
+      alert('삭제 실패: ' + err.message);
+    }
   };
 
   const handleExtend = async () => {
@@ -323,12 +372,36 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                           {stat?.print_count || 0}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => setExtendModal({ userId: user.id, email: user.email })}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1 mx-auto"
-                          >
-                            <Plus size={12} /> 구독 부여
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              title="구독 연장/부여"
+                              onClick={() => setExtendModal({ userId: user.id, email: user.email })}
+                              className="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-xs font-semibold rounded-lg transition flex flex-col items-center"
+                            >
+                              <Plus size={14} /> 주기
+                            </button>
+                            <button
+                              title="비밀번호 초기화 메일 전송"
+                              onClick={() => handleResetPasswordEmail(user.email)}
+                              className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-semibold rounded-lg transition flex flex-col items-center"
+                            >
+                              <Mail size={14} /> 링크
+                            </button>
+                            <button
+                              title="관리자 권한 강제 비밀번호 변경"
+                              onClick={() => handleForceResetPassword(user.id, user.email)}
+                              className="px-2.5 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 text-xs font-semibold rounded-lg transition flex flex-col items-center"
+                            >
+                              <Key size={14} /> 강제
+                            </button>
+                            <button
+                              title="회원 강제 삭제"
+                              onClick={() => handleDeleteUser(user.id, user.email)}
+                              className="px-2.5 py-1.5 bg-red-900/40 hover:bg-red-900/80 text-red-500 text-xs font-semibold rounded-lg transition flex flex-col items-center ml-2 border border-red-900/50"
+                            >
+                              <Trash2 size={14} /> 탈퇴
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

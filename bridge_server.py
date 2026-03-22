@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import logging
 import os
 import tempfile
+import glob
 from typing import Optional, List, Dict
 import threading
 import time
@@ -148,6 +150,69 @@ def pair_bridge_agent(req: AutoPairRequest):
     except Exception as e:
         logger.error(f"Auto pair failed: {e}")
         return {"status": "error", "message": str(e)}
+
+
+# -----------------------------------------------------
+# 윈도우 폰트 목록 & 파일 제공 API
+# -----------------------------------------------------
+WINDOWS_FONT_DIR = os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts")
+
+@app.get("/api/fonts")
+def list_system_fonts():
+    """
+    윈도우에 설치된 폰트 파일 목록을 반환합니다.
+    브라우저 보안 제한 없이 파이썬이 직접 C:\\Windows\\Fonts를 읽습니다.
+    """
+    try:
+        font_extensions = ('.ttf', '.otf', '.ttc', '.woff', '.woff2')
+        fonts = []
+        
+        if os.path.isdir(WINDOWS_FONT_DIR):
+            for f in os.listdir(WINDOWS_FONT_DIR):
+                if f.lower().endswith(font_extensions):
+                    full_path = os.path.join(WINDOWS_FONT_DIR, f)
+                    name_without_ext = os.path.splitext(f)[0]
+                    size_kb = round(os.path.getsize(full_path) / 1024, 1)
+                    fonts.append({
+                        "filename": f,
+                        "name": name_without_ext,
+                        "size_kb": size_kb,
+                        "extension": os.path.splitext(f)[1].lower()
+                    })
+        
+        # 이름순 정렬
+        fonts.sort(key=lambda x: x["name"].lower())
+        logger.info(f"Found {len(fonts)} font files in {WINDOWS_FONT_DIR}")
+        return {"status": "success", "count": len(fonts), "fonts": fonts}
+    except Exception as e:
+        logger.error(f"Error listing fonts: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/fonts/file/{font_filename}")
+def get_font_file(font_filename: str):
+    """
+    특정 폰트 파일을 직접 제공합니다.
+    프론트엔드에서 이 파일을 다운받아 Supabase에 업로드할 수 있습니다.
+    """
+    try:
+        # 보안: 경로 조작 방지
+        safe_name = os.path.basename(font_filename)
+        font_path = os.path.join(WINDOWS_FONT_DIR, safe_name)
+        
+        if not os.path.isfile(font_path):
+            raise HTTPException(status_code=404, detail=f"Font file not found: {safe_name}")
+        
+        return FileResponse(
+            path=font_path, 
+            filename=safe_name,
+            media_type="application/octet-stream"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving font file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

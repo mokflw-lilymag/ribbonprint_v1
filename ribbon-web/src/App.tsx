@@ -34,6 +34,13 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const getRemainingDays = (expiresAt: string | null) => {
+  if (!expiresAt) return 0;
+  const diffTime = new Date(expiresAt).getTime() - new Date().getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+};
+
 // ==========================================
 // Constants & Config
 // ==========================================
@@ -48,7 +55,6 @@ export interface FontItem {
 
 const FONTS: FontItem[] = [
   // 커스텀 한자 폰트 (유저 직접 지정)
-  { value: 'font-hj-zihun', name: '字小魂金陵手书 (로컬 폰트)', langs: ['hj'], preview: '祝發展 謹弔' },
   { value: 'font-hj-uoq', name: 'UoqMunThenKhung', langs: ['hj'], preview: '祝發展 謹弔' },
   { value: 'font-hj-lxgw', name: 'LXGW WenKai TC', langs: ['hj'], preview: '祝發展 謹弔' },
   { value: 'font-hj-klee', name: 'Klee One (Bold 600)', langs: ['hj'], preview: '祝發展 謹弔' },
@@ -266,7 +272,7 @@ const DEFAULT_PHRASE_CATEGORIES = [
   }
 ];
 
-const SYMBOL_BANK = ['★', '(주)', '(유)', '♥', '♣', '♠', '◆', '▶', '◀', '※', '✝', '卍'];
+const SYMBOL_BANK = ['★', '☆', '(주)', '(유)', '♥', '♡', '♣', '♧', '♠', '♤', '◆', '◇', '▶', '▷', '◀', '◁', '※', '✝', '卍'];
 
 // ==========================================
 // Parsing & Types
@@ -959,11 +965,6 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
        return;
     }
 
-    if (!selectedPrinter) {
-       alert("연결된 프린터를 선택해주세요.");
-       return;
-    }
-
     try {
       setIsPrinting(true);
       
@@ -1241,7 +1242,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           )}
           {/* Subscription Badge */}
           {!subLoading && (
-            <div className={`mt-2 px-2 py-1 rounded-lg text-[10px] font-medium text-center border tracking-wide ${
+            <div className={`mt-2 px-2 py-1.5 rounded-lg text-[10px] font-medium text-center border tracking-wide ${
               isAdmin
                 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                 : subscription.isActive 
@@ -1251,7 +1252,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               {isAdmin
                 ? '🛡️ 관리자 - 모든 기능 가능'
                 : subscription.isActive 
-                  ? `✅ ${subscription.plan === 'yearly' ? '연간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'half_yearly' ? '6개월' : subscription.plan === 'event' ? '이벤트' : '월간'} 구독중`
+                  ? `✅ ${subscription.plan === 'yearly' ? '연간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'half_yearly' ? '6개월' : subscription.plan === 'event' ? '이벤트' : '월간'} 구독중 (잔여: ${getRemainingDays(subscription.expiresAt)}일)`
                   : '🔓 무료 체험 중 (인쇄 제한)'}
             </div>
           )}
@@ -1340,7 +1341,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 onChange={e => setSelectedPrinter(e.target.value)}
                 className="flex-1 p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2"
               >
-                {printers.length === 0 && <option value="">감지된 프린터 없음</option>}
+                {printers.length === 0 && <option value="">☁️ 매장 기본 프린터로 원격 전송</option>}
                 {printers.map(p => (
                   <option key={p.name} value={p.name}>
                     {p.name} {p.status === 'Ready' ? '✅' : '⚠️'}
@@ -1405,10 +1406,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             type="text"
             value={leftText} 
             onChange={e => setLeftText(e.target.value)}
-            onFocus={() => {
-              setActiveSide('left');
-              setIsRightPanelOpen(true); // Open bank panel when editing text
-            }}
+            onFocus={() => setActiveSide('left')}
             className="w-full p-2 rounded-lg text-sm leading-tight focus:ring-2 bg-slate-800 border-slate-700 text-white outline-none"
             placeholder="경조사 입력"
           />
@@ -1506,10 +1504,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             type="text"
             value={rightText} 
             onChange={e => setRightText(e.target.value)}
-            onFocus={() => {
-              setActiveSide('right');
-              setIsRightPanelOpen(true); // Open bank panel when editing text
-            }}
+            onFocus={() => setActiveSide('right')}
             className="w-full p-2 rounded-lg text-sm leading-tight focus:ring-2 bg-slate-800 border-slate-700 text-white outline-none"
             placeholder="보내는이 입력"
           />
@@ -1576,6 +1571,68 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             </div>
           </div>
         </div>
+
+        {/* Phrase Selector (경조사어 뱅크) */}
+        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
+             <div className="flex items-center gap-2">
+               <h3 className="text-xs font-semibold text-slate-400">자주 쓰는 문구</h3>
+               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="상용구 관리 (DB)">
+                 <SettingsIcon size={14} />
+               </button>
+             </div>
+             <select 
+               value={phraseCategory} 
+               onChange={e => setPhraseCategory(Number(e.target.value))}
+               className="bg-slate-900 border border-slate-700 text-[10px] rounded px-2 py-1 outline-none focus:ring-1 ring-blue-500 text-slate-300 max-w-[120px]"
+             >
+               {phraseCategories.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
+             </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 select-none">
+            {phraseCategories[phraseCategory]?.phrases.map((item, idx) => (
+               <button 
+                 key={idx} 
+                 onClick={() => {
+                   if (activeSide === 'left') setLeftText(item.text);
+                   else setRightText(item.text);
+                 }}
+                 className="group bg-slate-900 hover:bg-blue-900/40 border border-slate-700 hover:border-blue-500 rounded p-1.5 transition-all flex flex-col items-center justify-center min-h-[40px] overflow-hidden"
+               >
+                 <span className="text-[11px] font-semibold text-slate-200 mb-0.5 leading-none truncate w-full text-center">{item.text}</span>
+                 <span className="text-[9px] text-slate-500 group-hover:text-blue-300 truncate w-full text-center">{item.desc}</span>
+               </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Symbols Data Bank */}
+        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <h3 className="text-xs font-semibold text-slate-400 mb-2">특수기호 (Click to Insert)</h3>
+          <div className="grid grid-cols-6 gap-1.5 select-none">
+            {SYMBOL_BANK.map(sym => (
+               <button 
+                 key={sym} 
+                 onClick={() => insertSymbol(sym)}
+                 className="bg-slate-900 hover:bg-brand border border-slate-700 hover:border-brand rounded py-1.5 text-[11px] transition-colors"
+               >
+                 {sym}
+               </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tip */}
+        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 mt-2 mb-10 select-none">
+          <h3 className="text-xs font-semibold text-blue-400 mb-2">프리뷰 팁 (7대 법칙)</h3>
+          <ul className="text-[10px] text-slate-400 space-y-1 ml-3 list-disc">
+            <li>영문/숫자는 <strong>클릭</strong>하여 수동으로 눕힐 수 있습니다.</li>
+            <li><code>[홍길동]</code> 한 칸 압축.</li>
+            <li><code>[왼쪽/오른쪽]</code> 두 열 나누기.</li>
+            <li>여백에 맞게 자동 압축(Squash).</li>
+            <li><code>(주)</code> 등 전각 문자 최적화.</li>
+          </ul>
+        </div>
       </aside>
 
       {/* 2. Center Panel: Canvas */}
@@ -1588,7 +1645,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         className={cn(
           "flex-1 relative overflow-auto p-4 sm:p-12 bg-[#0f172a] min-w-0 transition-all duration-300",
           isSidebarOpen ? "lg:ml-0" : "ml-0",
-          isRightPanelOpen ? "lg:mr-0" : "mr-0",
+          "mr-0",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
       >
@@ -1602,22 +1659,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             <ChevronRight size={24} className="group-hover:translate-x-0.5 transition-transform" />
           </button>
         )}
-        {!isRightPanelOpen && (
-          <button 
-            onClick={() => setIsRightPanelOpen(true)}
-            className="fixed top-1/2 right-0 -translate-y-1/2 z-[45] flex flex-col items-center py-5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-l-2xl shadow-2xl border-y border-l border-blue-400/50 transition-all active:scale-95 group"
-            title="경조사어·상용구 메뉴 열기"
-          >
-            <ChevronLeft size={20} className="mb-4 group-hover:-translate-x-1 transition-transform" />
-            <div className="flex flex-col items-center gap-0.5 select-none">
-              {"경조사어·상용구 선택".split('').map((char, i) => (
-                <span key={i} className="text-[11px] font-black text-blue-50/90 leading-none">
-                  {char}
-                </span>
-              ))}
-            </div>
-          </button>
-        )}
+
 
         {/* Mobile Menu Toggle Floating Button (Legacy, keep but adjust) */}
         {!isSidebarOpen && (
@@ -1749,8 +1791,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
       {/* Floating Actions Toolbar */}
         <div className={cn(
-          "fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-xl p-2 rounded-full border border-slate-600/50 flex gap-1 sm:gap-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[60] transition-all duration-300",
-          isRightPanelOpen && "lg:right-80 lg:left-auto lg:translate-x-0"
+          "fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-xl p-2 rounded-full border border-slate-600/50 flex gap-1 sm:gap-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[60] transition-all duration-300"
         )}>
           <button 
             onClick={() => checkSubscriptionAction(() => setIsTemplateManagerOpen(true))} 
@@ -1793,82 +1834,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         </div>
       </main>
 
-      {/* 3. Right Panel: Banks */}
-      <aside className={cn(
-        "glass-panel fixed lg:sticky top-0 right-0 bottom-0 h-full shrink-0 z-30 p-5 overflow-y-auto space-y-6 border-l border-slate-700 transition-all duration-300 transform-gpu bg-slate-900/95 lg:bg-transparent",
-        isRightPanelOpen 
-          ? "w-[260px] sm:w-72 lg:w-80 translate-x-0" 
-          : "w-0 p-0 overflow-hidden border-none translate-x-full lg:absolute lg:opacity-0"
-      )}>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">데이터 뱅크</h3>
-          <button 
-            onClick={() => setIsRightPanelOpen(false)}
-            className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition"
-            title="뱅크 닫기"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
-          <div className="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
-             <div className="flex items-center gap-2">
-               <h3 className="text-xs font-semibold text-slate-400">자주 쓰는 상용구</h3>
-               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="상용구 관리 (DB)">
-                 <SettingsIcon size={14} />
-               </button>
-             </div>
-             <select 
-               value={phraseCategory} 
-               onChange={e => setPhraseCategory(Number(e.target.value))}
-               className="bg-slate-800 text-[10px] border-none rounded px-2 py-1 outline-none focus:ring-1 ring-blue-500 text-slate-300 max-w-[120px]"
-             >
-               {phraseCategories.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
-             </select>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {phraseCategories[phraseCategory]?.phrases.map((item, idx) => (
-               <button 
-                 key={idx} 
-                 onClick={() => {
-                   if (activeSide === 'left') setLeftText(item.text);
-                   else setRightText(item.text);
-                 }}
-                 className="group bg-slate-800 hover:bg-blue-900/30 border border-slate-700 hover:border-blue-500 rounded p-2 transition-all flex flex-col items-center justify-center min-h-[50px] overflow-hidden"
-               >
-                 <span className="text-[12px] font-semibold text-slate-200 mb-0.5 leading-tight truncate w-full text-center">{item.text}</span>
-                 <span className="text-[9px] text-slate-500 group-hover:text-blue-300 truncate w-full text-center">{item.desc}</span>
-               </button>
-            ))}
-          </div>
 
-
-        <div>
-          <h3 className="text-xs font-semibold text-slate-400">특수기호 (Click to Insert)</h3>
-          <div className="grid grid-cols-4 gap-2">
-            {SYMBOL_BANK.map(sym => (
-               <button 
-                 key={sym} 
-                 onClick={() => insertSymbol(sym)}
-                 className="bg-slate-800 hover:bg-brand border border-slate-700 hover:border-brand rounded py-2 text-xs transition-colors"
-               >
-                 {sym}
-               </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 space-y-2 mt-auto">
-          <h3 className="text-xs font-semibold text-blue-400 mb-2">프리뷰 팁 (7대 법칙)</h3>
-          <ul className="text-[10px] text-slate-400 space-y-1 ml-3 list-disc">
-            <li>영문/숫자는 자동 회전됩니다. <strong>클릭</strong>하여 수동으로 눕힐 수 있습니다.</li>
-            <li><code>[홍길동]</code> 입력 시 한 칸에 알맞게 압축됩니다.</li>
-            <li><code>[왼쪽/오른쪽]</code> 입력 시 두 열로 나뉩니다.</li>
-            <li>글자가 많아지면 리본 밖으로 나가지 않도록 자동으로 여백에 딱 맞게(Squash) 조절됩니다.</li>
-            <li><code>(주)</code> 등의 기호는 전각 최적화됩니다.</li>
-          </ul>
-        </div>
-
-      </aside>
 
       {/* Inject custom font styles */}
       <style>
