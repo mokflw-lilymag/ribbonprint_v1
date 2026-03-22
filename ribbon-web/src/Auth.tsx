@@ -42,12 +42,35 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: () => void 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans pattern-bg">
       <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-700">
-        <div className="p-8 text-center border-b border-slate-700 bg-slate-800/50">
-          <h1 className="text-3xl font-semibold text-white mb-2 tracking-tight">RibbonPrint <span className="text-blue-500">SaaS</span></h1>
-          <p className="text-slate-400 text-sm">프리미엄 리본 출력 서비스에 오신 것을 환영합니다</p>
+        <div className="p-8 text-center border-b border-slate-700 bg-slate-800/50 flex flex-col items-center">
+          <img src="/logo.png" alt="Ribbonist" className="w-24 h-24 mb-4 object-contain drop-shadow-2xl rounded-2xl border border-slate-700/30" />
+          <h1 className="text-3xl font-black text-white mb-1 tracking-tight">Ribbonist <span className="text-blue-500">/</span></h1>
+          <p className="text-blue-400 font-bold tracking-[0.3em] text-[12px] uppercase mt-1">Friends of Florist</p>
         </div>
         
         <div className="p-8">
+          
+          {/* 체험 계정 안내 안내문 (마케팅 용도) */}
+          <div className="mb-6 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-center">
+            <p className="text-sm font-semibold text-blue-400 mb-3 flex justify-center items-center gap-2">
+              ✨ 가입 없이 기능부터 체험해보세요!
+            </p>
+            <button 
+              type="button"
+              onClick={() => {
+                setIsLogin(true);
+                setEmail('test@test.com');
+                setPassword('123456');
+              }}
+              className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition group"
+            >
+              <span className="block text-xs text-slate-400 mb-1 group-hover:text-slate-300">공용 테스트 계정 (클릭 시 자동 입력)</span>
+              <span className="font-mono text-blue-300 font-semibold tracking-wider">test@test.com</span>
+              <span className="text-slate-500 mx-2">/</span>
+              <span className="font-mono text-blue-300 font-semibold tracking-wider">123456</span>
+            </button>
+          </div>
+
           <form onSubmit={handleAuth} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">이메일</label>

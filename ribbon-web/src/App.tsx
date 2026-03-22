@@ -23,7 +23,8 @@ import {
 import { FontManagerDialog } from './FontManagerDialog';
 import { TemplateManagerDialog } from './TemplateManagerDialog';
 import { PhraseManagerDialog } from './PhraseManagerDialog';
-import { FolderOpen, Settings as SettingsIcon } from 'lucide-react';
+import { ManualDialog } from './ManualDialog';
+import { FolderOpen, Settings as SettingsIcon, BookOpen } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { type CustomFontInfo, getAllCustomFonts, getHiddenFonts } from './lib/font-store';
 import { useSubscription } from './lib/use-subscription';
@@ -745,9 +746,16 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const { subscription, loading: subLoading } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false); // Default to false as requested
+  // isRightPanelOpen removed to satisfy lint as requested
 
-  const checkSubscriptionAction = (action: () => void) => {
+  const checkSubscriptionAction = async (action: () => void) => {
+    // 체험 계정 판별 및 마케팅 페이월 (Paywall)
+    if (session?.user?.email === 'test@test.com') {
+      alert("🚨 실제 인쇄 및 저장은 개인 계정 가입 후 무료로 이용 가능합니다.\n지금 1분 만에 가입하세요!");
+      await supabase.auth.signOut();
+      return;
+    }
+
     if (isAdmin || subscription.isActive) {
       action();
     } else {
@@ -764,6 +772,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [printTarget, setPrintTarget] = useState<'both' | 'left' | 'right'>('both');
   const [printLayout, setPrintLayout] = useState<'connected' | 'separate'>('connected');
   const [mediaType, setMediaType] = useState<'roll' | 'cut'>('roll');
+  const [cuttingMargin, setCuttingMargin] = useState(50); // 커팅 여유분 (mm), 기본 5cm = 50mm
+  const [printQuality, setPrintQuality] = useState<'fast' | 'high'>('fast');
 
   const connectedPrintRef = useRef<HTMLDivElement>(null);
   const separateLeftRef = useRef<HTMLDivElement>(null);
@@ -819,6 +829,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [isFontManagerOpen, setIsFontManagerOpen] = useState(false);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [isPhraseManagerOpen, setIsPhraseManagerOpen] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
   const [phraseCategories, setPhraseCategories] = useState(DEFAULT_PHRASE_CATEGORIES);
@@ -951,7 +962,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({ user_id: session.user.id })
-       }).catch(err => {
+       }).catch(() => {
          // Silently fail if local bridge is not running (e.g. on mobile remote usage)
        });
     }
@@ -968,7 +979,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     try {
       setIsPrinting(true);
       
-      const sendJob = async (ref: React.RefObject<HTMLDivElement | null>, w: number, h: number, label: string) => {
+      const sendJob = async (ref: React.RefObject<HTMLDivElement | null>, w: number, h: number) => {
         if (!ref.current) return;
         
         const dataUrl = await toPng(ref.current, {
@@ -985,8 +996,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               printer_name: selectedPrinter,
               image_base64: dataUrl,
               width_mm: w,
-              length_mm: h,
-              media_type: mediaType
+              length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
+              media_type: mediaType,
+              cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
+              print_quality: printQuality
             }),
           });
 
@@ -1005,10 +1018,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           user_id: session.user.id,
           printer_name: selectedPrinter,
           image_base64: dataUrl,
-          width_mm: w,
-          length_mm: h,
-          status: 'pending'
-        });
+           width_mm: w,
+           length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
+           status: 'pending'
+         });
 
         if (cloudError) {
           throw new Error(`클라우드 출력 전송 실패: ${cloudError.message}`);
@@ -1018,20 +1031,20 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       };
 
       if (printTarget === 'left') {
-        await sendJob(separateLeftRef, width, length, "경조사");
+        await sendJob(separateLeftRef, width, length);
         alert("경조사 인쇄 작업이 전송되었습니다.");
       } else if (printTarget === 'right') {
-        await sendJob(separateRightRef, width, length, "보내는이");
+        await sendJob(separateRightRef, width, length);
         alert("보내는이 인쇄 작업이 전송되었습니다.");
       } else {
         // 양쪽 모두
         if (printLayout === 'connected') {
-          await sendJob(connectedPrintRef, width, length * 2, "양쪽 연결");
+          await sendJob(connectedPrintRef, width, length * 2);
           alert("양쪽 연결 인쇄 작업이 전송되었습니다.");
         } else {
-          await sendJob(separateLeftRef, width, length, "경조사");
+          await sendJob(separateLeftRef, width, length);
           await new Promise(r => setTimeout(r, 1000));
-          await sendJob(separateRightRef, width, length, "보내는이");
+          await sendJob(separateRightRef, width, length);
           alert("각각 인쇄 작업(총 2건)이 전송되었습니다.");
         }
       }
@@ -1091,7 +1104,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         setZoom(Math.min(1.5, zoomH, zoomW));
       }
     }
-  }, [isSidebarOpen, isRightPanelOpen]); // Re-fit when side panels toggle
+  }, [isSidebarOpen]); // Re-fit when side panel toggles
 
   useEffect(() => {
     const defaultSpecs = RIBBON_TYPES.find(t => t.id === ribbonType);
@@ -1157,7 +1170,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     ribbonType, length, width, lace, marginTop, marginBottom,
     leftText, leftFontConfig, leftRatioX, leftRatioY, leftRotated: Array.from(leftRotated), leftSpacing,
     rightText, rightFontConfig, rightRatioX, rightRatioY, rightRotated: Array.from(rightRotated), rightSpacing,
-    printTarget, printLayout, mediaType
+    printTarget, printLayout, mediaType, cuttingMargin, printQuality
   };
 
   const onLoadConfig = (c: any) => {
@@ -1186,6 +1199,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     if (c.printTarget) setPrintTarget(c.printTarget);
     if (c.printLayout) setPrintLayout(c.printLayout);
     if (c.mediaType) setMediaType(c.mediaType);
+    if (c.cuttingMargin !== undefined) setCuttingMargin(c.cuttingMargin);
+    if (c.printQuality) setPrintQuality(c.printQuality);
   };
 
   return (
@@ -1200,9 +1215,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       )}>
         <div className="flex flex-col gap-5">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2">
-              RibbonMaker <span className="text-blue-500">PRO</span>
-            </h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                <img src="/logo.png" alt="Ribbonist Logo" className="w-6 h-6 object-contain" />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Ribbonist</span>
+              </h1>
+              <span className="text-[8px] text-slate-500 uppercase tracking-widest ml-8 font-medium">Friends of Florist</span>
+            </div>
             <button 
               onClick={() => setIsSidebarOpen(false)}
               className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition"
@@ -1302,26 +1321,35 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                  >보내는이</button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                 {printTarget === 'both' ? (
+              <div className="grid grid-cols-3 gap-2">
+                 {mediaType === 'roll' ? (
                    <select 
-                     value={printLayout} 
-                     onChange={e => setPrintLayout(e.target.value as any)}
+                     value={cuttingMargin} 
+                     onChange={e => setCuttingMargin(Number(e.target.value))}
                      className="p-2 rounded-lg text-xs bg-slate-800 border-slate-700 text-white focus:ring-1"
                    >
-                     <option value="connected">양쪽 연결 인쇄</option>
-                     <option value="separate">각각 인쇄</option>
+                     {[1,2,3,4,5,6,7,8,9,10].map(cm => (
+                       <option key={cm} value={cm * 10}>✂️ 커팅 {cm}cm</option>
+                     ))}
                    </select>
                  ) : (
-                   <div className="p-2 rounded-lg text-xs bg-slate-900/50 text-slate-500 flex items-center justify-center italic">단면 인쇄 모드</div>
+                   <div className="p-2 rounded-lg text-xs bg-slate-900/50 text-slate-500 flex items-center justify-center italic">커팅 불필요</div>
                  )}
                  <select 
                    value={mediaType} 
                    onChange={e => setMediaType(e.target.value as any)}
                    className="p-2 rounded-lg text-xs bg-slate-800 border-slate-700 text-white outline-none focus:ring-1"
                  >
-                   <option value="roll">롤 리본</option>
-                   <option value="cut">낱장 리본</option>
+                   <option value="roll">🔄 롤 리본</option>
+                   <option value="cut">📄 컷 리본</option>
+                 </select>
+                 <select 
+                   value={printQuality} 
+                   onChange={e => setPrintQuality(e.target.value as any)}
+                   className="p-2 rounded-lg text-xs bg-slate-800 border-slate-700 text-white outline-none focus:ring-1"
+                 >
+                   <option value="fast">⚡ 고속 인쇄</option>
+                   <option value="high">💎 고급(저속)</option>
                  </select>
               </div>
             </div>
@@ -1622,16 +1650,35 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           </div>
         </div>
 
-        {/* Tip */}
-        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 mt-2 mb-10 select-none">
-          <h3 className="text-xs font-semibold text-blue-400 mb-2">프리뷰 팁 (7대 법칙)</h3>
-          <ul className="text-[10px] text-slate-400 space-y-1 ml-3 list-disc">
-            <li>영문/숫자는 <strong>클릭</strong>하여 수동으로 눕힐 수 있습니다.</li>
-            <li><code>[홍길동]</code> 한 칸 압축.</li>
-            <li><code>[왼쪽/오른쪽]</code> 두 열 나누기.</li>
-            <li>여백에 맞게 자동 압축(Squash).</li>
-            <li><code>(주)</code> 등 전각 문자 최적화.</li>
-          </ul>
+        {/* Tip / Manual Button */}
+        <div className="mt-4 mb-2 w-full select-none">
+          <button
+            onClick={() => setIsManualOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg border border-blue-400/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <BookOpen size={18} />
+            Ribbonist 초보자 매뉴얼
+          </button>
+        </div>
+
+        {/* Customer Support / QA */}
+        <div className="mb-10 w-full select-none">
+          <div className="bg-slate-800/60 border border-slate-700 p-3.5 rounded-xl border-l-4 border-l-blue-500 flex flex-col gap-1">
+            <h3 className="text-xs font-bold text-slate-300 flex items-center gap-1.5 mb-1">
+              🎧 고객센터 & QnA 핫라인
+            </h3>
+            <p className="text-[10px] text-slate-400">장애 및 구독 관련 언제든 문의주세요.</p>
+            <div className="flex flex-col gap-1 mt-1 text-[11px] font-mono text-slate-300 bg-slate-900/50 p-2 rounded">
+              <div className="flex justify-between items-center">
+                <span>📞 전화:</span>
+                <span className="text-blue-300 font-bold">1588-0000</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>💬 카톡:</span>
+                <span className="text-amber-400 font-bold cursor-pointer hover:underline border-b border-transparent">@ribbonprint</span>
+              </div>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -1857,6 +1904,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         isOpen={isPhraseManagerOpen}
         onClose={() => setIsPhraseManagerOpen(false)}
         onChanged={loadCustomPhrases}
+      />
+
+      {/* Manual Dialog */}
+      <ManualDialog
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
       />
 
       {/* Template Manager Dialog */}

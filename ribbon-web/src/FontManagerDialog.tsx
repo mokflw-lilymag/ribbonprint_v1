@@ -118,6 +118,26 @@ export function FontManagerDialog({ isOpen, onClose, baseFonts, onSettingsChange
         alert("웹 폰트 CSS 주소와 폰트 패밀리 이름을 모두 입력해주세요.");
         return;
       }
+      // 보안 및 제한 정책 적용
+      const webFontCount = customFonts.filter(f => f.source === 'web').length;
+      if (webFontCount >= 5) {
+        alert("웹 폰트는 최대 5개까지만 추가할 수 있습니다. 불필요한 폰트를 삭제 후 다시 시도해주세요.");
+        return;
+      }
+      
+      const isValidWebFontUrl = webUrl.startsWith('https://') && 
+        (webUrl.includes('fonts.googleapis.com') || 
+         webUrl.includes('cdn') || 
+         webUrl.endsWith('.css') || 
+         webUrl.endsWith('.woff') || 
+         webUrl.endsWith('.woff2') || 
+         webUrl.endsWith('.ttf'));
+
+      if (!isValidWebFontUrl) {
+         alert("보안 정책 위반: 유효하지 않은 웹 폰트 주소입니다. (https:// 로 시작하는 구글 폰트나 눈누 폰트 CSS 링크만 허용됩니다)");
+         return;
+      }
+
       newFont.webUrl = webUrl;
       newFont.fontFamily = fontFamily;
     }
