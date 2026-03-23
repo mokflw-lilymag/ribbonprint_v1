@@ -1,4 +1,4 @@
-import { X, BookOpen, Settings, Type, Printer, ShieldCheck, PenTool, LayoutTemplate } from 'lucide-react';
+import { X, BookOpen, Settings, PenTool } from 'lucide-react';
 
 export function ManualDialog({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   if (!isOpen) return null;
