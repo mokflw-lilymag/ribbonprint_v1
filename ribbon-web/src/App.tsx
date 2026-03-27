@@ -780,7 +780,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = "7.0";
+const REQUIRED_BRIDGE_VERSION = "7.1";
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -1140,6 +1140,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           backgroundColor: '#ffffff',
           cacheBust: false,
           skipAutoScale: true,
+          skipFonts: true, // 로컬/캐시된 폰트만 사용하여 리소스 부족 및 지연 방지
+          fontEmbedCSS: '', 
           style: {
             transform: 'none', // 캡처 시 CSS transform 제거
           }

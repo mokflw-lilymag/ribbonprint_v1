@@ -11,12 +11,18 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION    = '7.0';
+const VERSION    = '7.1';
 const PORT       = 8000;
 const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
-const EPSON_AGENT = path.resolve(__dirname, 'drv_eps.exe');
-const HP_AGENT    = path.resolve(__dirname, 'drv_hp.exe');
+
+// ★ [CRITICAL] `pkg`로 빌드된 환경인지 확인하여 물리 디스크의 실제 경로를 계산합니다.
+// pkg 환경에서는 __dirname이 /snapshot/ 가상 경로를 반환하여 .exe 파일을 spawn/fs 접근하지 못합니다.
+const isPkg = typeof process.pkg !== 'undefined';
+const BASE_DIR = isPkg ? path.dirname(process.execPath) : __dirname;
+
+const EPSON_AGENT = path.join(BASE_DIR, 'drv_eps.exe');
+const HP_AGENT    = path.join(BASE_DIR, 'drv_hp.exe');
 const HAS_EPSON   = fs.existsSync(EPSON_AGENT);
 const HAS_HP      = fs.existsSync(HP_AGENT);
 const UPDATE_URL  = 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip';
@@ -51,7 +57,7 @@ const DEFAULT_PRESETS = {
 
 function loadPresets() {
   try {
-    const p = path.resolve(__dirname, 'printer_presets.json');
+    const p = path.join(BASE_DIR, 'printer_presets.json');
     if (!fs.existsSync(p)) {
       console.log('> Presets  : ⚠️  Not found, using defaults');
       return DEFAULT_PRESETS;
