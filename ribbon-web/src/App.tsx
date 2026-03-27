@@ -2257,12 +2257,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
               <button 
                 onClick={() => {
-                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Installer.exe');
+                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip');
                   setIsBridgeModalOpen(false);
                 }}
                 className="flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40"
               >
-                설치 마법사 다운로드
+                자동 설치 패키지 다운로드
               </button>
             </div>
           </div>

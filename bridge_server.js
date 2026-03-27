@@ -12,8 +12,8 @@ app.use(cors());
 app.use(express.json({ limit: '70mb' }));
 
 // ─── Engine Paths ──────────────────────────────────────────
-const EPSON_AGENT = path.resolve(__dirname, 'ribbon_printer.exe');
-const HP_AGENT    = path.resolve(__dirname, 'ribbon_printer_hp.exe');
+const EPSON_AGENT = path.resolve(__dirname, 'drv_eps.exe');
+const HP_AGENT    = path.resolve(__dirname, 'drv_hp.exe');
 const HAS_EPSON   = fs.existsSync(EPSON_AGENT);
 const HAS_HP      = fs.existsSync(HP_AGENT);
 
@@ -432,18 +432,26 @@ app.post('/api/update', (req, res) => {
   const batPath = path.join(process.cwd(), 'updater.bat');
   const batLogic = `@echo off
 echo ==============================================
-echo RibbonBridge Auto Updater
+echo RibbonBridge Auto Updater (v6.1+)
 echo ==============================================
 echo Please wait... Waiting for server to stop...
 timeout /t 2 /nobreak >nul
-taskkill /F /IM RibbonBridge_Core.exe >nul 2>&1
+taskkill /F /IM sys_service.exe >nul 2>&1
+
 echo Downloading latest version from cloud...
 powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip' -OutFile 'update.zip'"
+
 echo Extracting update...
-powershell -Command "Expand-Archive -Path 'update.zip' -DestinationPath '.' -Force"
+powershell -Command "Expand-Archive -Path 'update.zip' -DestinationPath 'upd_tmp' -Force"
+
+echo Applying update...
+:: Copy files from the "system" folder inside the zip to the current installation folder
+xcopy /Y /E "upd_tmp\\system\\*" "." >nul
+rmdir /S /Q upd_tmp
 del update.zip
+
 echo Starting new version...
-start "" "인쇄서버_시작하기(클릭).vbs"
+start "" "launch.vbs"
 (goto) 2>nul & del "%~f0"`;
 
   fs.writeFileSync(batPath, batLogic);
