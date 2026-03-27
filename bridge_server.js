@@ -383,9 +383,15 @@ try {
   $w100      = [int]($widthMM  / 25.4 * 100)
   $h100      = [int]($lengthMM / 25.4 * 100)
   $offsetX   = [int]($leftMM   / 25.4 * 100)
-  $totalW    = $offsetX + $w100
 
-  $paper = New-Object System.Drawing.Printing.PaperSize("RibbonCustom", $totalW, $h100)
+  # [CRITICAL FIX]
+  # EPSON 및 대부분의 데스크탑 프린터 드라이버는 너비가 89mm(3.5인치) 미만인 PaperSize 를
+  # API를 통해 받으면 인쇄 작업을 소리없이(드라이버 단에서) 폐기해버립니다.
+  # 따라서 논리적 용지 너비를 항상 A4 너비인 210mm (약 827)로 고정하여 드라이버를 속이고,
+  # 출력할 이미지는 여백(offsetX)만큼 띄워서 그립니다.
+  $driverSafeWidth = 827 # 210mm in hundredths of an inch
+
+  $paper = New-Object System.Drawing.Printing.PaperSize("RibbonCustom", $driverSafeWidth, $h100)
   $pd.DefaultPageSettings.PaperSize  = $paper
   $pd.DefaultPageSettings.Margins    = New-Object System.Drawing.Printing.Margins(0,0,0,0)
   $pd.DefaultPageSettings.Landscape  = $false
@@ -396,6 +402,11 @@ try {
     if (-not $printed) {
       $dest = New-Object System.Drawing.Rectangle($offsetX, 0, $w100, $h100)
       $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      
+      # [CRITICAL FIX] 리본 인쇄 특성상 '끝(하단)'부터 인쇄되어 나와야 사용자가 보기에 자연스럽게 읽힙니다.
+      # 따라서 이미지를 180도 회전(상하/좌우 반전)시킨 뒤 출력합니다.
+      $img.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone)
+      
       $e.Graphics.DrawImage($img, $dest)
       $printed = $true
     }
