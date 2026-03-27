@@ -346,12 +346,19 @@ class RibbonPrinterBridge:
             
             # 2. 강제 커스텀 용지 설정 (핵심!)
             # 0.1mm 단위로 설정 (win32print 특성)
-            devmode.PaperSize = 0  # DMPAPER_USER
+            devmode.PaperSize = 256  # win32con.DMPAPER_USER (256) - 사용자 정의 용지
             devmode.PaperWidth = int(width_mm * 10)
             devmode.PaperLength = int(length_mm * 10)
-            # 드라이버에게 우리가 가로/세로/사이즈를 직접 정의했음을 알림
-            devmode.Fields |= win32print.DM_PAPERSIZE | win32print.DM_PAPERWIDTH | win32print.DM_PAPERLENGTH
             
+            # 드라이버에게 우리가 가로/세로/사이즈를 직접 정의했음을 알림
+            devmode.Fields |= win32con.DM_PAPERSIZE | win32con.DM_PAPERWIDTH | win32con.DM_PAPERLENGTH
+            
+            # 드라이버에 DEVMODE 변경사항 병합 (엡손 드라이버에서 커스텀 크기를 완전히 인식하도록 강제함)
+            try:
+                win32print.DocumentProperties(0, phandle, self.current_printer, devmode, devmode, win32print.DM_IN_BUFFER | win32print.DM_OUT_BUFFER)
+            except Exception as e:
+                logger.warning(f"DocumentProperties 병합 실패 (무시됨): {e}")
+
             # 3. DC 생성 (수정된 devmode를 전달하여 드라이버 제약 우회)
             hdc_handle = win32gui.CreateDC("WINSPOOL", self.current_printer, devmode)
             hdc = win32ui.CreateDCFromHandle(hdc_handle)
@@ -362,6 +369,10 @@ class RibbonPrinterBridge:
             
             phys_width = int(width_mm * printer_dpi_x / 25.4)
             phys_length = int(length_mm * printer_dpi_y / 25.4)
+
+            # 프린터의 하드웨어 마진 (여백) 확인
+            offset_x = hdc.GetDeviceCaps(112) # PHYSICALOFFSETX
+            offset_y = hdc.GetDeviceCaps(113) # PHYSICALOFFSETY
             
             # 5. 인쇄 작업 시작
             job_name = f"RibbonPrint_{int(width_mm)}x{int(length_mm)}mm"
@@ -370,8 +381,9 @@ class RibbonPrinterBridge:
             
             # 6. 이미지 그리기 (물리적 영역에 스케일링하여 투사)
             dib = ImageWin.Dib(image.convert("RGB"))
-            # StretchDIBits 느낌으로 물리적 크기에 맞춰 출력
-            dib.draw(hdc.GetHandleOutput(), (0, 0, phys_width, phys_length))
+            
+            # 여백을 무시하고 전체 용지 크기에 출력될 수 있도록 마진(offset) 값을 역보정합니다.
+            dib.draw(hdc.GetHandleOutput(), (-offset_x, -offset_y, phys_width - offset_x, phys_length - offset_y))
             
             hdc.EndPage()
             hdc.EndDoc()

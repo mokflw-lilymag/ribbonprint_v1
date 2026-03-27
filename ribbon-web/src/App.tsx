@@ -69,27 +69,39 @@ async function getFontDataUri(url: string): Promise<string | null> {
 }
 
 async function embedActiveFontsIntoElement(element: HTMLElement) {
-  // Use activeFontFaces to in-memory cache fonts as they are requested.
+  // Get all font families used in this element (nested)
+  const usedFonts = new Set<string>();
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT);
+  let node = walker.currentNode as HTMLElement;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    const family = style.fontFamily?.replace(/['"]/g, '').split(',')[0].trim();
+    if (family) usedFonts.add(family);
+    node = walker.nextNode() as HTMLElement;
+  }
+
   const activeFontFaces: string[] = [];
   
-  // Find all @font-face rules across stylesheets
+  // Find only the relevant @font-face rules
   for (const sheet of Array.from(document.styleSheets)) {
     try {
       if (!sheet.cssRules) continue;
       for (const rule of Array.from(sheet.cssRules)) {
         if (rule instanceof CSSFontFaceRule) {
-          const cssText = rule.cssText;
-          const urlMatch = cssText.match(/url\(['"]?([^'"]+)['"]?\)/);
-          if (urlMatch) {
-            const fontUrl = urlMatch[1];
-            if (fontUrl.startsWith('http')) {
-              const dataUri = await getFontDataUri(fontUrl);
-              if (dataUri) {
-                // Return a modified CSS string where URL is replaced with data URI
-                activeFontFaces.push(cssText.replace(fontUrl, dataUri));
+          const family = rule.style.fontFamily?.replace(/['"]/g, '').trim();
+          if (family && usedFonts.has(family)) {
+            const cssText = rule.cssText;
+            const urlMatch = cssText.match(/url\(['"]?([^'"]+)['"]?\)/);
+            if (urlMatch) {
+              const fontUrl = urlMatch[1];
+              if (fontUrl.startsWith('http')) {
+                const dataUri = await getFontDataUri(fontUrl);
+                if (dataUri) {
+                  activeFontFaces.push(cssText.replace(fontUrl, dataUri));
+                }
+              } else {
+                activeFontFaces.push(cssText);
               }
-            } else {
-              activeFontFaces.push(cssText);
             }
           }
         }
@@ -845,7 +857,8 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = "9.0";
+const REQUIRED_BRIDGE_VERSION = '11.1';
+const PORT = 8000;
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -860,6 +873,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   // ─── Bridge Connection Status (Live Polling) ───
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [bridgeVersion, setBridgeVersion] = useState('');
+  const [showQueue, setShowQueue] = useState(false);
   const bridgeCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadPrinters = () => {
@@ -1208,40 +1222,38 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         return;
       }
       
-      const sendJob = async (ref: React.RefObject<HTMLDivElement | null>, w: number, h: number, label: string) => {
-        if (!ref.current) {
-          throw new Error(`캡처 영역(${label})을 찾을 수 없습니다.`);
-        }
-        
-        console.log(`[Print] Capturing ${label}... (${w}x${h}mm)`);
-        
+      // Helper to process a single ref into a rotated base64 image
+      const captureRef = async (ref: React.RefObject<HTMLDivElement | null>, label: string, rotate: boolean = true) => {
+        if (!ref.current) throw new Error(`캡처 영역(${label})을 찾을 수 없습니다.`);
+        console.log(`[Print] Capturing ${label} (rotate=${rotate})...`);
         const captureStart = Date.now();
-        
-        // [v9.0] 폰트 프리로드 대신 캡처 시점에 필요한 웹폰트만 data URI로 변환해서 주입합니다.
-        // 이 방식은 앱 시작 속도를 늦추지 않으면서도 프린트 시 폰트 깨짐을 완벽하게 해결합니다.
         await embedActiveFontsIntoElement(ref.current);
-
-        // [Ultimate Fix] skipFonts: true를 사용하여 수백 개의 시스템 폰트 스캔 과정을 생략합니다. 
-        // 전송 속도가 1분 -> 1초로 단축됩니다.
         const dataUrl = await toPng(ref.current, {
           pixelRatio: 2.0, 
           backgroundColor: '#ffffff',
           cacheBust: false,
           skipAutoScale: true,
           skipFonts: true,
-          style: {
-            transform: 'none', 
-          }
+          style: { transform: 'none' }
         });
         
-        // [v9.0 Add] 인쇄 방향 반전 (180도 회전)
-        // 리본 프린터의 급지 방식에 맞춰 이미지를 뒤집어 전송함
-        const rotatedUrl = await rotateImage180(dataUrl);
-
+        let processedUrl = dataUrl;
+        if (rotate) {
+          processedUrl = await rotateImage180(dataUrl);
+        }
+        
         const captureTime = Date.now() - captureStart;
-        const imageSize = Math.round(rotatedUrl.length * 0.75 / 1024);
-        console.log(`[Print] ${label} Capture & Rotate: ${captureTime}ms (~${imageSize}KB)`);
-        console.log(`[Print] 🚀 Sending: printer=${selectedPrinter}, margin=${marginOffset}mm, width=${w}mm, length=${h}mm`);
+        console.log(`[Print] ${label} Capture & Process: ${captureTime}ms`);
+        return processedUrl;
+      };
+      
+      const sendJob = async (refs: {ref: React.RefObject<HTMLDivElement | null>, label: string, rotate?: boolean}[], w: number, h: number, jobLabel: string) => {
+        const images = [];
+        for (const target of refs) {
+          images.push(await captureRef(target.ref, target.label, target.rotate ?? true));
+        }
+
+        console.log(`[Print] 🚀 Sending ${jobLabel}: printer=${selectedPrinter}, segments=${images.length}, margin=${marginOffset}mm, width=${w}mm, length=${h}mm`);
 
         // 로컬 브릿지 인쇄 시도
         try {
@@ -1253,7 +1265,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               printer_name: selectedPrinter,
-              image_base64: rotatedUrl,
+              images: images,
               width_mm: w,
               length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
               media_type: mediaType,
@@ -1272,28 +1284,25 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               console.log(`[Print] ✅ Local print success (${result.method || 'native'})`);
               return; // 성공!
             }
-            // 로컬 실패 시 에러 메시지 표시
             throw new Error(result.message || '인쇄 실패');
           } else {
             throw new Error(`Bridge HTTP ${response.status}`);
           }
         } catch (err: any) {
-          if (err.name === 'AbortError') {
-            throw new Error('인쇄 시간이 초과되었습니다 (60초). 프린터 연결을 확인해주세요.');
-          }
-          // 진짜 에러 (브릿지는 연결되었는데 인쇄 실패)
+          if (err.name === 'AbortError') throw new Error('인쇄 시간이 초과되었습니다 (60초). 프린터 연결을 확인해주세요.');
           console.error(`[Print] Local bridge error: ${err.message}`);
           throw err;
         }
       };
 
       if (printTarget === 'left') {
-        await sendJob(separateLeftRef, width, length, '경조사');
+        await sendJob([{ref: separateLeftRef, label: '경조사'}], width, length, '경조사');
         alert("✅ 경조사 인쇄 완료!");
       } else if (printTarget === 'right') {
-        await sendJob(separateRightRef, width, length, '보내는이');
+        await sendJob([{ref: separateRightRef, label: '보내는이'}], width, length, '보내는이');
         alert("✅ 보내는이 인쇄 완료!");
       } else {
+<<<<<<< Updated upstream
         // [V11] 양쪽 모두: 리본 로딩 방지를 위해 하나의 작업(Array)으로 묶어서 전송
         const leftImg = await captureAndRotate(separateLeftRef, '경조사');
         const rightImg = await captureAndRotate(separateRightRef, '보내는이');
@@ -1319,8 +1328,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         
         if (!response.ok) throw new Error("인쇄 서버 응답 실패");
         alert("✅ 양쪽 연속 인쇄 완료! (리본 로딩 방지 적용)");
+=======
+        // 양쪽 모두 (UI 레이아웃 설정과 무관하게 항상 개별 캡처 후 브릿지에서 병합)
+        // Swap orientation based on user feedback:
+        // Top (경조사): Inverted, Bottom (보내는이): Upright
+        await sendJob([
+          {ref: separateLeftRef, label: '경조사', rotate: true},  // Top: DOWN
+          {ref: separateRightRef, label: '보내는이', rotate: false} // Bottom: UP
+        ], width, length, '양쪽배너통합');
+        // 작업 추가 후 대기열 열기
+        setShowQueue(true);
+        alert("🚀 인쇄 작업이 대기열에 추가되었습니다. 우측 하단 모니터에서 확인하세요.");
+>>>>>>> Stashed changes
       }
-
     } catch (error: any) {
        console.error("[Print] Error:", error);
        
@@ -2496,6 +2516,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         </div>
       )}
 
+      {/* Print Queue Monitor Widget */}
+      <PrintQueueMonitor isOpen={showQueue} onClose={() => setShowQueue(false)} />
+      <MonitorToggle onClick={() => setShowQueue(!showQueue)} hasJobs={false} />
+
       <UpdateBridgeModal 
         isOpen={isUpdateModalOpen}
         isUpdating={isUpdating}
@@ -2632,5 +2656,131 @@ function LoadConfigDialog({ isOpen, onClose, onLoad, userId }: { isOpen: boolean
         <button onClick={onClose} className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded">닫기</button>
       </div>
     </div>
+  );
+}
+function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+  const [queue, setQueue] = useState<any[]>([]);
+  const pollRef = useRef<any>(null);
+
+  const fetchQueue = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/queue');
+      const data = await res.json();
+      if (data.status === 'success') setQueue(data.data);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchQueue();
+      pollRef.current = setInterval(fetchQueue, 3000);
+    } else {
+      if (pollRef.current) clearInterval(pollRef.current);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [isOpen]);
+
+  const handleRetry = async (id: string) => {
+    try {
+      await fetch(`http://127.0.0.1:8000/api/queue/retry/${id}`, { method: 'POST' });
+      fetchQueue();
+    } catch (e) { alert("재시도 실패"); }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await fetch(`http://127.0.0.1:8000/api/queue/${id}`, { method: 'DELETE' });
+      fetchQueue();
+    } catch (e) { alert("삭제 실패"); }
+  };
+
+  if (!isOpen) return (
+    <button 
+      onClick={() => onClose()} // this state logic should be inverted but for simplicity:
+      style={{ position: 'fixed', bottom: '20px', right: '20px' }}
+      onMouseEnter={() => onClose()} // reuse trigger
+      className="hidden" // hide default, logic handled below
+    />
+  );
+
+  // Manual toggle for easy access
+  const hasActiveJob = queue.some(q => q.status === 'printing');
+
+  return (
+    <div className={cn(
+      "fixed bottom-4 right-4 z-[400] transition-all duration-300",
+      isOpen ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0 pointer-events-none"
+    )}>
+      <div className="bg-slate-800/95 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl w-80 overflow-hidden">
+        <div className="p-4 bg-slate-700/50 border-b border-slate-600 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className={cn("w-2 h-2 rounded-full", hasActiveJob ? "bg-green-500 animate-pulse" : "bg-slate-500")} />
+            <h3 className="text-sm font-bold text-white">인쇄 작업 모니터</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+        
+        <div className="max-h-96 overflow-y-auto p-2 space-y-2">
+          {queue.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-xs text-pretty">
+              현재 대기 중인 작업이 없습니다.
+            </div>
+          ) : (
+            queue.map(job => (
+              <div key={job.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-300">{job.printer}</div>
+                    <div className="text-[10px] text-slate-500">{job.width}mm x {job.length}mm ({job.segments}단)</div>
+                  </div>
+                  <div className={cn(
+                    "px-2 py-0.5 rounded text-[9px] font-bold",
+                    job.status === 'printing' ? "bg-blue-900/40 text-blue-400" :
+                    job.status === 'completed' ? "bg-emerald-900/40 text-emerald-400" :
+                    "bg-red-900/40 text-red-400"
+                  )}>
+                    {job.status === 'printing' ? '인쇄 중' : job.status === 'completed' ? '완료' : '오류'}
+                  </div>
+                </div>
+                
+                <div className="flex gap-1 mt-2">
+                  {job.status !== 'printing' && (
+                    <button 
+                      onClick={() => handleRetry(job.id)}
+                      className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] rounded transition-colors"
+                    >
+                      🔄 다시 출력
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => handleDelete(job.id)}
+                    className="flex-1 py-1.5 bg-slate-700 hover:bg-red-900/40 text-slate-300 text-[10px] rounded transition-colors"
+                  >
+                    🗑️ 삭제
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Logic to show monitor automatically:
+// In App, add a button to reopen if closed manually
+function MonitorToggle({ onClick, hasJobs }: { onClick: () => void, hasJobs: boolean }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={cn(
+        "fixed bottom-6 right-6 p-3 rounded-full shadow-lg z-[399] transition-all",
+        "bg-slate-800 border border-slate-700 text-white hover:bg-slate-700",
+        hasJobs && "ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-900"
+      )}
+    >
+      <span className="text-lg">🖨️</span>
+    </button>
   );
 }

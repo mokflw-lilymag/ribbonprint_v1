@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-//   RibbonBridge v9.0 — Epson M105 Banner Print Engine
-//   GDI · Self-Updater · Font Proxy · /api/pair fixed
+//   RibbonBridge v11.0 — Queue Monitoring & Persistence
+//   GDI · Queue System · Retry/Cancel Support
 // ═══════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -11,7 +11,7 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION = '9.0';
+const VERSION = '11.1';
 const PORT    = 8000;
 const TMP_DIR = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -19,103 +19,81 @@ const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
 const isPkg = typeof process.pkg !== 'undefined';
 const BASE_DIR = isPkg ? path.dirname(process.execPath) : __dirname;
 
-const EPSON_AGENT = path.join(BASE_DIR, 'drv_eps.exe');
-const HP_AGENT    = path.join(BASE_DIR, 'drv_hp.exe');
-const HAS_EPSON   = fs.existsSync(EPSON_AGENT);
-const HAS_HP      = fs.existsSync(HP_AGENT);
-const UPDATE_URL  = 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip';
-
 // ─── App Setup ─────────────────────────────────────────────────
 const app = express();
 app.use(cors());
+<<<<<<< Updated upstream
 app.use(express.json({ limit: '50mb' }));
 
 // ── 버전 체크 API (자동 업데이트 유도용) ───────────────────────
 app.get('/api/version', (req, res) => {
   res.json({ status: 'success', version: VERSION });
 });
+=======
+app.use(express.json({ limit: '250mb' }));
+>>>>>>> Stashed changes
 
 if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
 
+// ─── Global Queue State ────────────────────────────────────────
+let printQueue = []; // [{id, status, timestamp, printer, images, width, length, margin}]
+
 // ─── Boot Log ──────────────────────────────────────────────────
 console.log('╔══════════════════════════════════════════════════╗');
-console.log(`║      RibbonBridge v${VERSION} — M105 Banner Engine       ║`);
+console.log(`║      RibbonBridge v${VERSION} — Banner Folding       ║`);
 console.log('╚══════════════════════════════════════════════════╝');
 console.log(`> Platform : ${os.platform()} ${os.release()}`);
-console.log(`> Node     : ${process.version}`);
-console.log(`> Epson    : ${HAS_EPSON ? '✅ Ready' : '⛔ Not found (GDI fallback)'}`);
-console.log(`> GDI      : ✅ Always available`);
-
-// ─── Printer Brand Detection ───────────────────────────────────
-const BRAND_KEYWORDS = {
-  epson:   ['epson'],
-  hp:      ['hp','hewlett','packard','deskjet','officejet','laserjet','envy','photosmart'],
-  canon:   ['canon','pixma','imageclass'],
-  brother: ['brother'],
-  samsung: ['samsung','xpress']
-};
-
-function detectBrand(printerName, driverName) {
-  const h = `${printerName||''} ${driverName||''}`.toLowerCase();
-  for (const [brand, kws] of Object.entries(BRAND_KEYWORDS)) {
-    if (kws.some(kw => h.includes(kw))) return brand;
-  }
-  return 'other';
-}
-
-// ─── Printer Cache ─────────────────────────────────────────────
-const cachedPrinterInfo = {};
+console.log(`> Temp Dir : ${TMP_DIR}`);
 
 // ─── Routes ════════════════════════════════════════════════════
 
-// Health check
 app.get('/', (_req, res) => {
-  res.json({ status: 'ok', version: VERSION, uptime: Math.floor(process.uptime()), platform: os.platform() });
+  res.json({ status: 'ok', version: VERSION, queue_count: printQueue.length });
 });
 
-app.get('/api/status', (_req, res) => {
-  res.json({
-    status: 'ok', version: VERSION, uptime: Math.floor(process.uptime()),
-    engines: { epson_escp: { available: HAS_EPSON }, gdi: { available: true } },
-    cached_printers: Object.keys(cachedPrinterInfo).length,
-    temp_dir: TMP_DIR
-  });
-});
-
-// ── /api/pair: 웹앱-브릿지 페어링 (에러 없이 정상 응답) ──────
+// 페어링
 app.post('/api/pair', (req, res) => {
-  const { user_id } = req.body || {};
-  console.log(`[Pair] ✅ Web app connected${user_id ? ` (user: ${user_id.slice(0,8)}...)` : ''}`);
   res.json({ status: 'ok', version: VERSION, paired: true });
 });
 
-// ── /api/printers: 프린터 목록 ────────────────────────────────
+// 프린터 목록
 app.get('/api/printers', (_req, res) => {
   try {
     const cmd = `powershell -NoProfile -Command "Get-Printer | Select-Object Name,PrinterStatus,DriverName | ConvertTo-Json -Compress"`;
     const raw = execSync(cmd, { timeout: 10000, encoding: 'utf8' });
     let list = JSON.parse(raw || '[]');
     if (!Array.isArray(list)) list = [list];
-    const data = list.filter(p => p.Name).map(p => {
-      const brand = detectBrand(p.Name, p.DriverName || '');
-      cachedPrinterInfo[p.Name] = { brand, driver: p.DriverName || '' };
-      const isM105 = p.Name.toUpperCase().includes('M105');
-      return {
-        name: p.Name,
-        status: p.PrinterStatus === 0 ? 'Ready' : 'Other',
-        brand,
-        driver: p.DriverName || '',
-        engine: isM105 ? 'GDI (M105 Optimized)' : brand === 'epson' && HAS_EPSON ? 'Epson ESC/P' : 'GDI'
-      };
-    });
+    const data = list.filter(p => p.Name).map(p => ({
+      name: p.Name,
+      status: p.PrinterStatus === 0 ? 'Ready' : 'Error/Offline',
+      driver: p.DriverName || ''
+    }));
     return res.json({ status: 'success', data });
   } catch (err) {
     return res.json({ status: 'error', message: err.message });
   }
 });
 
-// ── /api/print_image: 핵심 프린트 엔진 ───────────────────────
+// ─── Queue Management API ──────────────────────────────────────
+
+// 1. 대기열 목록 가져오기
+app.get('/api/queue', (_req, res) => {
+  // 전송 시 이미지는 제외하고 메타데이터만 전송
+  const list = printQueue.map(q => ({
+    id: q.id,
+    status: q.status,
+    timestamp: q.timestamp,
+    printer: q.printer,
+    width: q.width,
+    length: q.length,
+    segments: q.images.length
+  }));
+  res.json({ status: 'success', data: list });
+});
+
+// 2. 새로운 작업 추가 & 인쇄 시작
 app.post('/api/print_image', async (req, res) => {
+<<<<<<< Updated upstream
   const { printer_name, image_base64, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0 } = req.body;
   const jobId = `job_${Date.now()}`;
   const localPaths = [];
@@ -164,27 +142,138 @@ app.post('/api/print_image', async (req, res) => {
 //  · 이미지는 이미 App.tsx에서 180도 회전되어 있음
 // ─── GDI Engine: Epson M105 배너 최적화 ───────────────────────
 function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0) {
+=======
+  const { printer_name, images, width_mm, length_mm, margin_offset_mm } = req.body;
+  if (!printer_name || !images) return res.status(400).json({ status: 'error', message: 'Missing data' });
+
+  const jobId = `job_${Date.now()}`;
+  const newJob = {
+    id: jobId,
+    status: 'printing',
+    timestamp: new Date().toISOString(),
+    printer: printer_name,
+    images: images,
+    width: width_mm,
+    length: length_mm,
+    margin: margin_offset_mm
+  };
+
+  printQueue.unshift(newJob);
+  if (printQueue.length > 10) printQueue.pop(); // 최대 10개만 유지
+
+  // 백그라운드에서 인쇄 실행
+  executePrintJob(newJob);
+
+  res.json({ status: 'success', job_id: jobId });
+});
+
+// 3. 작업 재시도
+app.post('/api/queue/retry/:jobId', (req, res) => {
+  const job = printQueue.find(q => q.id === req.params.jobId);
+  if (!job) return res.status(404).json({ status: 'error', message: 'Job not found' });
+
+  job.status = 'printing';
+  executePrintJob(job);
+  res.json({ status: 'success' });
+});
+
+// 4. 작업 삭제/취소
+app.delete('/api/queue/:jobId', (req, res) => {
+  const index = printQueue.findIndex(q => q.id === req.params.jobId);
+  if (index > -1) {
+    printQueue.splice(index, 1);
+    // 윈도우 스풀러 강제 취소 명령 (옵션)
+    exec(`powershell "Get-PrintJob -PrinterName '*' | Where-Object { $_.JobDescription -match 'Ribbon' } | Remove-PrintJob"`);
+    res.json({ status: 'success' });
+  } else {
+    res.status(404).json({ status: 'error', message: 'Not found' });
+  }
+});
+
+// ─── Core Logic: Execute Print Job ─────────────────────────────
+async function executePrintJob(job) {
+  try {
+    console.log(`[Queue] Starting Job: ${job.id} on ${job.printer}`);
+    await printViaGDI(job.printer, job.images, parseFloat(job.width), parseFloat(job.length), parseFloat(job.margin) || 0);
+    job.status = 'completed';
+    console.log(`[Queue] Job Completed: ${job.id}`);
+  } catch (err) {
+    job.status = 'failed';
+    console.error(`[Queue] Job Failed: ${job.id} - ${err.message}`);
+  }
+}
+
+// ─── GDI Engine (v10.9 logic preserved) ───────────────────────
+function printViaGDI(printerName, images, widthMM, segmentLengthMM, leftMarginMM) {
+>>>>>>> Stashed changes
   return new Promise((resolve, reject) => {
     // images가 단일 경로면 배열로 변환
     const imageList = Array.isArray(images) ? images : [images];
     const safePrinter = printerName.replace(/'/g, "''");
+<<<<<<< Updated upstream
     
     // mm → 1/100 inch 변환
     const widthUnits  = Math.round(widthMM  / 25.4 * 100);
     const lengthUnits = Math.round(lengthMM / 25.4 * 100);
     const canvasWidthUnits = 827; // A4 Fixed
     const imageHeightMM = lengthMM - cuttingMarginMM;
+=======
+    const segmentLengthUnits = Math.round(segmentLengthMM / 25.4 * 100);
+    const canvasWidthUnits = 827; 
+>>>>>>> Stashed changes
     const finalX = leftMarginMM - (widthMM / 2);
+    const totalLengthUnits = segmentLengthUnits * images.length;
+
+    const tmpFiles = [];
+    images.forEach((img, idx) => {
+      const rawData = img.includes(',') ? img.split(',')[1] : img;
+      const tmpFile = path.join(TMP_DIR, `q_seg_${Date.now()}_${idx}.png`);
+      fs.writeFileSync(tmpFile, Buffer.from(rawData, 'base64'));
+      tmpFiles.push(tmpFile);
+    });
+
+    const fileListForPS = tmpFiles.map(f => `'${f.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',');
 
     console.log(`[GDI V11] Combined Job: ${imageList.length} pages, Center=${leftMarginMM}mm, Paper=${lengthMM}mm`);
 
     const psScript = `
 Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Drawing.Printing;
+public class DevDev {
+    [DllImport("winspool.drv", CharSet=CharSet.Auto, SetLastError=true)]
+    public static extern int DocumentProperties(IntPtr h, IntPtr hp, string n, IntPtr outP, IntPtr inP, int f);
+    [DllImport("winspool.drv", CharSet=CharSet.Auto, SetLastError=true)]
+    public static extern bool OpenPrinter(string n, out IntPtr hp, IntPtr pd);
+    [DllImport("winspool.drv")]
+    public static extern bool ClosePrinter(IntPtr hp);
+    public static void Force(PrinterSettings ps, int w, int l) {
+        try {
+            IntPtr h = ps.GetHdevmode();
+            IntPtr p = Marshal.ReadIntPtr(h);
+            Marshal.WriteInt32(p, 40, Marshal.ReadInt32(p, 40) | 2 | 4 | 8);
+            Marshal.WriteInt16(p, 44, 256);
+            Marshal.WriteInt16(p, 46, (short)l);
+            Marshal.WriteInt16(p, 48, (short)w);
+            IntPtr hp;
+            if (OpenPrinter(ps.PrinterName, out hp, IntPtr.Zero)) {
+                DocumentProperties(IntPtr.Zero, hp, ps.PrinterName, p, p, 10);
+                ClosePrinter(hp);
+            }
+            ps.SetHdevmode(h);
+            Marshal.FreeHGlobal(h);
+        } catch {}
+    }
+}
+"@
 
 $pd = New-Object System.Drawing.Printing.PrintDocument
 $pd.PrinterSettings.PrinterName = '${safePrinter}'
 $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 
+<<<<<<< Updated upstream
 # 용지 폭 고정 및 여백 0 설정 (불필요한 급지 방지)
 $paperSize = New-Object System.Drawing.Printing.PaperSize("Ribbon-Roll", ${canvasWidthUnits}, ${lengthUnits})
 $pd.DefaultPageSettings.PaperSize = $paperSize
@@ -250,39 +339,64 @@ try {
       }
     });
     ps.on('error', err => reject(new Error(`spawn error: ${err.message}`)));
+=======
+$totalL = ${totalLengthUnits} * 25.4 / 100
+[DevDev]::Force($pd.PrinterSettings, [Math]::Round(${widthMM} * 10), [Math]::Round($totalL * 10))
+
+$ps = New-Object System.Drawing.Printing.PaperSize("Ribbon", ${canvasWidthUnits}, ${totalLengthUnits})
+$ps.RawKind = 256
+$pd.DefaultPageSettings.PaperSize = $ps
+$pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+
+$imgs = @(${fileListForPS})
+$bitmaps = New-Object System.Collections.Generic.List[System.Drawing.Image]
+foreach($p in $imgs){ $bitmaps.Add([System.Drawing.Image]::FromFile($p)) }
+
+$pd.Add_PrintPage({
+  param($s, $e)
+  $e.Graphics.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
+  $offX = $e.PageSettings.HardMarginX / 100 * 25.4
+  $offY = $e.PageSettings.HardMarginY / 100 * 25.4
+  $e.Graphics.TranslateTransform(-$offX, -$offY)
+  $y = 0
+  $blackPen = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 0.2)
+  foreach($b in $bitmaps){
+    $r = New-Object System.Drawing.RectangleF(${finalX}, $y, ${widthMM}, ${segmentLengthMM})
+    $e.Graphics.DrawImage($b, $r)
+    $y += ${segmentLengthMM}
+    # Draw Fold Line after first segment if multiple
+    if($y -lt ($totalL - 1)){
+        $e.Graphics.DrawLine($blackPen, ${finalX}, $y, (${finalX} + ${widthMM}), $y)
+    }
+  }
+  $blackPen.Dispose()
+  $e.HasMorePages = $false
+})
+try { $pd.Print(); Write-Host "OK" } catch { Write-Error $_ } finally { $bitmaps | %{ $_.Dispose() }; $pd.Dispose() }
+`;
+
+    const psProc = spawn('powershell', ['-NoProfile', '-Command', psScript]);
+    psProc.on('close', code => {
+      tmpFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
+      if (code === 0) resolve(); else reject(new Error('PS Exit '+code));
+    });
+>>>>>>> Stashed changes
   });
 }
 
 // ─── Font APIs ────────────────────────────────────────────────
 app.get('/api/fonts', (_req, res) => {
   try {
-    const fonts = fs.readdirSync(FONT_DIR)
-      .filter(f => /\.(ttf|otf|ttc)$/i.test(f))
-      .map(f => ({ name: path.parse(f).name, filename: f }));
+    const fonts = fs.readdirSync(FONT_DIR).filter(f => /\.(ttf|otf|ttc)$/i.test(f)).map(f => ({ name: path.parse(f).name, filename: f }));
     res.json({ status: 'success', fonts });
-  } catch (err) {
-    res.json({ status: 'error', message: err.message });
-  }
+  } catch (err) { res.json({ status: 'error', message: err.message }); }
 });
 
-app.get('/api/fonts/file/:fontFilename', (req, res) => {
-  const fontPath = path.join(FONT_DIR, path.basename(req.params.fontFilename));
-  if (fs.existsSync(fontPath)) res.sendFile(fontPath);
-  else res.status(404).end();
+app.get('/api/fonts/file/:fn', (req, res) => {
+  const p = path.join(FONT_DIR, path.basename(req.params.fn));
+  if (fs.existsSync(p)) res.sendFile(p); else res.status(404).end();
 });
 
-// ─── Update ───────────────────────────────────────────────────
-app.post('/api/update', (_req, res) => {
-  res.json({ status: 'ok', message: 'Restarting...' });
-  setTimeout(() => process.exit(0), 500);
-});
-
-// ─── Start ────────────────────────────────────────────────────
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n> 🚀 RibbonBridge v${VERSION} ready at http://localhost:${PORT}\n`);
-  console.log(`   Endpoints:`);
-  console.log(`   GET  /              → health check`);
-  console.log(`   POST /api/pair      → web app pairing`);
-  console.log(`   GET  /api/printers  → printer list`);
-  console.log(`   POST /api/print_image → print job\n`);
+  console.log(`\n> 🚀 RibbonBridge v${VERSION} (Monitor Mode) at http://localhost:${PORT}\n`);
 });
