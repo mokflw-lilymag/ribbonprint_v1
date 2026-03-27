@@ -11,7 +11,7 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION    = '7.3';
+const VERSION    = '7.4';
 const PORT       = 8000;
 const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -90,7 +90,13 @@ function detectBrand(printerName, driverName) {
   return 'other';
 }
 
-function getEngineStrategy(brand) {
+function getEngineStrategy(brand, printerName = '') {
+  const isBasicEpson = (printerName || '').toUpperCase().includes('M105');
+  
+  if (brand === 'epson' && isBasicEpson) {
+    return { engine: 'gdi', agent: null, label: 'GDI (Epson M-Series Optimization)' };
+  }
+  
   if (brand === 'epson' && HAS_EPSON) return { engine: 'escp', agent: EPSON_AGENT, label: 'Epson ESC/P RAW' };
   if (brand === 'hp'    && HAS_HP)    return { engine: 'pcl5', agent: HP_AGENT,    label: 'HP PCL5 RAW' };
   if (brand === 'epson')              return { engine: 'gdi',  agent: null, label: 'GDI (Epson agent missing)' };
@@ -205,7 +211,7 @@ app.get('/api/fonts/file/:fontFilename', (req, res) => {
 app.get('/api/printers', (_req, res) => {
   const mapPrinter = (p, driverName = '') => {
     const brand = detectBrand(p.Name || p, driverName);
-    const strategy = getEngineStrategy(brand);
+    const strategy = getEngineStrategy(brand, p.Name || p);
     cachedPrinterInfo[p.Name || p] = { brand, driver: driverName };
     return {
       name: p.Name || p,
@@ -279,7 +285,7 @@ app.post('/api/print_image', async (req, res) => {
     // Preset brand overrides heuristic if heuristic was generic
     if ((brand === 'other') && preset.brand) brand = preset.brand;
 
-    const strategy = getEngineStrategy(brand);
+    const strategy = getEngineStrategy(brand, printer_name);
     const leftMargin = preset.leftMargin || 34.5;
     const userOffset = parseFloat(margin_offset_mm) || 0;
     const effLeftMargin = leftMargin + userOffset;
