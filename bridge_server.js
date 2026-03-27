@@ -11,7 +11,7 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION    = '7.6';
+const VERSION    = '7.7';
 const PORT       = 8000;
 const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -373,32 +373,39 @@ try {
   $offsetX   = [int]($leftMM   / 25.4 * 100)
 
   # [CRITICAL FIX]
-  # EPSON 데스크탑 드라이버는 'Custom' 용지 대신 표준 'A4'를 사용할 때 끊김 없는 즉시 출력이 가능합니다.
-  $driverSafeWidth = 827 
-  $a4 = $pd.PrinterSettings.PaperSizes | Where-Object { ($_.Kind -eq 'A4') -or ($_.PaperName -like '*A4*') } | Select-Object -First 1
-  if ($a4) {
-      $pd.DefaultPageSettings.PaperSize = $a4
-  } else {
-      $pd.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize("A4_Safe", $driverSafeWidth, 1169)
-  }
+  $pd = New-Object System.Drawing.Printing.PrintDocument
+  $pd.PrinterSettings.PrinterName = $printerName
   
+  # 백그라운드 인쇄 시 팝업창이나 대기 상태가 발생하는 것을 원천 차단합니다.
+  $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
+
+  # [CRITICAL FIX] 
+  # M105 같은 데스크탑 모델은 'A4' 규격이 아니면 인쇄를 거부하는 경우가 많습니다.
+  # 하지만 리본은 길기 때문에, 'User-Defined'라는 명칭을 사용하여 드라이버의 거부감을 줄입니다.
+  # 너비는 무조건 A4 규격(8.27인치)으로 고정하여 센서 오작동을 막습니다.
+  $paper = New-Object System.Drawing.Printing.PaperSize("User-Defined", 827, $h100)
+  $pd.DefaultPageSettings.PaperSize = $paper
   $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
   $pd.DefaultPageSettings.Landscape = $false
-
+  
+  $img = [System.Drawing.Image]::FromFile($imagePath)
+  
   $printed = $false
-  $handler = {
+  $pd.Add_PrintPage({
     param($sender, $e)
     if (-not $printed) {
-      # 100분의 1인치 단위로 출력 영역을 계산합니다.
-      $dest = New-Object System.Drawing.Rectangle($offsetX, 0, $w100, $h100)
-      $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-      $e.Graphics.DrawImage($img, $dest)
+      $g = $e.Graphics
+      $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $g.PixelOffsetMode   = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+      
+      # 이미지를 100분의 1인치 단위 Rect로 정확히 매핑하여 그립니다.
+      $rect = New-Object System.Drawing.Rectangle($offsetX, 0, $w100, $h100)
+      $g.DrawImage($img, $rect)
       $printed = $true
     }
     $e.HasMorePages = $false
-  }
+  })
 
-  $pd.add_PrintPage($handler)
   $pd.Print()
   $img.Dispose()
   $pd.Dispose()
