@@ -43,6 +43,70 @@ const getRemainingDays = (expiresAt: string | null) => {
   return diffDays > 0 ? diffDays : 0;
 };
 
+// ─── On-Demand Font Caching System ───
+const fontCacheMap = new Map<string, string>(); // url -> dataUri
+
+async function getFontDataUri(url: string): Promise<string | null> {
+  if (fontCacheMap.has(url)) return fontCacheMap.get(url)!;
+  console.log(`[FontCache] Initial download: ${url}`);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        fontCacheMap.set(url, base64);
+        resolve(base64);
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn(`[FontCache] Failed to fetch font: ${url}`, e);
+    return null;
+  }
+}
+
+async function embedActiveFontsIntoElement(element: HTMLElement) {
+  // Use activeFontFaces to in-memory cache fonts as they are requested.
+  const activeFontFaces: string[] = [];
+  
+  // Find all @font-face rules across stylesheets
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      if (!sheet.cssRules) continue;
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (rule instanceof CSSFontFaceRule) {
+          const cssText = rule.cssText;
+          const urlMatch = cssText.match(/url\(['"]?([^'"]+)['"]?\)/);
+          if (urlMatch) {
+            const fontUrl = urlMatch[1];
+            if (fontUrl.startsWith('http')) {
+              const dataUri = await getFontDataUri(fontUrl);
+              if (dataUri) {
+                // Return a modified CSS string where URL is replaced with data URI
+                activeFontFaces.push(cssText.replace(fontUrl, dataUri));
+              }
+            } else {
+              activeFontFaces.push(cssText);
+            }
+          }
+        }
+      }
+    } catch (e) { /* ignore cross-origin errors */ }
+  }
+
+  if (activeFontFaces.length > 0) {
+    const styleEl = document.createElement('style');
+    styleEl.setAttribute('data-injected-fonts', 'true');
+    styleEl.textContent = activeFontFaces.join('\n');
+    element.prepend(styleEl);
+    return styleEl;
+  }
+  return null;
+}
+
 // ==========================================
 // Constants & Config
 // ==========================================
@@ -159,20 +223,21 @@ function FontSelector({ value, onChange, mode, fonts }: { value: string, onChang
 }
 
 const RIBBON_TYPES = [
-  { id: 'bouquet', name: '꽃다발 38x400mm', width: 38, lace: 5, length: 400, marginTop: 80, marginBottom: 50, fontSize: 30 },
-  { id: 'oriental_45', name: '동양란 45x450mm', width: 45, lace: 7, length: 450, marginTop: 100, marginBottom: 50, fontSize: 35 },
-  { id: 'oriental_50', name: '동양란 50x500mm', width: 50, lace: 10, length: 500, marginTop: 120, marginBottom: 80, fontSize: 40 },
-  { id: 'orchid_55', name: '동/서양란 55x500mm', width: 55, lace: 10, length: 500, marginTop: 120, marginBottom: 80, fontSize: 42 },
-  { id: 'western_60', name: '서양란 60/65x700mm', width: 60, lace: 10, length: 700, marginTop: 150, marginBottom: 100, fontSize: 45 },
-  { id: 'movie_70', name: '영화(중) 70x750mm', width: 70, lace: 10, length: 750, marginTop: 150, marginBottom: 100, fontSize: 55 },
-  { id: 'basket_95', name: '장바구니 95x1000mm', width: 95, lace: 10, length: 1000, marginTop: 180, marginBottom: 130, fontSize: 75 },
-  { id: 'pot_small', name: '화분 소 105/110x1100mm', width: 105, lace: 23, length: 1100, marginTop: 200, marginBottom: 150, fontSize: 80 },
-  { id: 'pot_medium', name: '화분 중 135x1500mm', width: 135, lace: 23, length: 1500, marginTop: 300, marginBottom: 200, fontSize: 100 },
-  { id: 'pot_large', name: '화분 대 150x1800mm', width: 150, lace: 23, length: 1800, marginTop: 350, marginBottom: 350, fontSize: 110 },
-  { id: 'wreath_1', name: '근조 1단 115x1200mm', width: 115, lace: 23, length: 1200, marginTop: 250, marginBottom: 150, fontSize: 90 },
-  { id: 'wreath_2', name: '근조 2단 135x1700mm', width: 135, lace: 23, length: 1700, marginTop: 300, marginBottom: 200, fontSize: 100 },
-  { id: 'wreath_3', name: '근조 3단 165x2200mm', width: 165, lace: 23, length: 2200, marginTop: 400, marginBottom: 300, fontSize: 130 },
-  { id: 'celebration_3', name: '축화 3단 165x2200mm', width: 165, lace: 23, length: 2200, marginTop: 400, marginBottom: 300, fontSize: 130 },
+  { id: 'bouquet', name: '꽃다발 38x400mm', width: 38, lace: 5, length: 400, marginTop: 80, marginBottom: 50, fontSize: 30, marginOffset: 53 },
+  { id: 'oriental_45', name: '동양란 45x450mm', width: 45, lace: 7, length: 450, marginTop: 100, marginBottom: 50, fontSize: 35, marginOffset: 57 },
+  { id: 'oriental_50', name: '동양란 50x500mm', width: 50, lace: 10, length: 500, marginTop: 120, marginBottom: 80, fontSize: 40, marginOffset: 60 },
+  { id: 'orchid_55', name: '동/서양란 55x500mm', width: 55, lace: 10, length: 500, marginTop: 120, marginBottom: 80, fontSize: 42, marginOffset: 62 },
+  { id: 'western_60', name: '서양란 60/65x700mm', width: 60, lace: 10, length: 700, marginTop: 150, marginBottom: 100, fontSize: 45, marginOffset: 65 },
+  { id: 'movie_70', name: '영화(중) 70x750mm', width: 70, lace: 10, length: 750, marginTop: 150, marginBottom: 100, fontSize: 55, marginOffset: 70 },
+  { id: 'ribbon_85', name: '리본 85x850mm', width: 85, lace: 10, length: 850, marginTop: 160, marginBottom: 120, fontSize: 65, marginOffset: 76 },
+  { id: 'basket_95', name: '장바구니 95x1000mm', width: 95, lace: 10, length: 1000, marginTop: 180, marginBottom: 130, fontSize: 75, marginOffset: 82 },
+  { id: 'pot_small', name: '화분 소 105/110x1100mm', width: 105, lace: 23, length: 1100, marginTop: 200, marginBottom: 150, fontSize: 80, marginOffset: 87 },
+  { id: 'pot_medium', name: '화분 중 135x1500mm', width: 135, lace: 23, length: 1500, marginTop: 300, marginBottom: 200, fontSize: 100, marginOffset: 102 },
+  { id: 'pot_large', name: '화분 대 150x1800mm', width: 150, lace: 23, length: 1800, marginTop: 350, marginBottom: 350, fontSize: 110, marginOffset: 110 },
+  { id: 'wreath_1', name: '근조 1단 115x1200mm', width: 115, lace: 23, length: 1200, marginTop: 250, marginBottom: 150, fontSize: 90, marginOffset: 92 },
+  { id: 'wreath_2', name: '근조 2단 135x1700mm', width: 135, lace: 23, length: 1700, marginTop: 300, marginBottom: 200, fontSize: 100, marginOffset: 102 },
+  { id: 'wreath_3', name: '근조 3단 165x2200mm', width: 165, lace: 23, length: 2200, marginTop: 400, marginBottom: 300, fontSize: 130, marginOffset: 117 },
+  { id: 'celebration_3', name: '축화 3단 165x2200mm', width: 165, lace: 23, length: 2200, marginTop: 400, marginBottom: 300, fontSize: 130, marginOffset: 117 },
 ];
 
 const DEFAULT_PHRASE_CATEGORIES = [
@@ -501,7 +566,7 @@ const RibbonCanvas = ({
           style={{
             top: `${marginTop * scaleRatio}px`,
             bottom: `${marginBottom * scaleRatio}px`,
-            transform: `translateX(${marginOffset * scaleRatio}px)`,
+            transform: 'none', 
           }}
         >
           {lines.map((line, lIdx) => {
@@ -755,7 +820,7 @@ const RibbonCanvas = ({
               className="absolute left-0 right-0 flex justify-center items-center pointer-events-none"
               style={{
                 top: `${(length - marginBottom) * scaleRatio}px`,
-                transform: `translateX(${marginOffset * scaleRatio}px)`,
+                transform: 'none',
                 height: `${marginBottom * scaleRatio}px`,
                 paddingLeft: `${lace * scaleRatio}px`,
                 paddingRight: `${lace * scaleRatio}px`
@@ -780,7 +845,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = "7.8";
+const REQUIRED_BRIDGE_VERSION = "9.0";
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -885,12 +950,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
   // Specs State
   const [ribbonType, setRibbonType] = useState(RIBBON_TYPES[0].id);
-  const [length, setLength] = useState(400);
-  const [width, setWidth] = useState(38);
-  const [lace, setLace] = useState(5);
-  const [marginTop, setMarginTop] = useState(80);
-  const [marginBottom, setMarginBottom] = useState(50);
-  const [marginOffset, setMarginOffset] = useState<number>(0);
+  const [length, setLength] = useState(RIBBON_TYPES[0].length);
+  const [width, setWidth] = useState(RIBBON_TYPES[0].width);
+  const [lace, setLace] = useState(RIBBON_TYPES[0].lace);
+  const [marginTop, setMarginTop] = useState(RIBBON_TYPES[0].marginTop);
+  const [marginBottom, setMarginBottom] = useState(RIBBON_TYPES[0].marginBottom);
+  const [marginOffset, setMarginOffset] = useState<number>(RIBBON_TYPES[0].marginOffset);
 
   // Left Ribbon State
   const [leftText, setLeftText] = useState('祝發展');
@@ -1088,6 +1153,24 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     reader.readAsDataURL(file);
   };
 
+  // ─── 프린트 헬퍼: 이미지 180도 회전 ───
+  const rotateImage180 = (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(Math.PI);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = dataUrl;
+    });
+  };
+
   const handlePrint = async () => {
     // 구독 상태 확인 (관리자는 항상 허용)
     if (!isAdmin && !subscription.isActive) {
@@ -1134,6 +1217,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         
         const captureStart = Date.now();
         
+        // [v9.0] 폰트 프리로드 대신 캡처 시점에 필요한 웹폰트만 data URI로 변환해서 주입합니다.
+        // 이 방식은 앱 시작 속도를 늦추지 않으면서도 프린트 시 폰트 깨짐을 완벽하게 해결합니다.
+        await embedActiveFontsIntoElement(ref.current);
+
         // [Ultimate Fix] skipFonts: true를 사용하여 수백 개의 시스템 폰트 스캔 과정을 생략합니다. 
         // 전송 속도가 1분 -> 1초로 단축됩니다.
         const dataUrl = await toPng(ref.current, {
@@ -1146,10 +1233,15 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             transform: 'none', 
           }
         });
+        
+        // [v9.0 Add] 인쇄 방향 반전 (180도 회전)
+        // 리본 프린터의 급지 방식에 맞춰 이미지를 뒤집어 전송함
+        const rotatedUrl = await rotateImage180(dataUrl);
 
         const captureTime = Date.now() - captureStart;
-        const imageSize = Math.round(dataUrl.length * 0.75 / 1024);
-        console.log(`[Print] ${label} Capture: ${captureTime}ms (~${imageSize}KB)`);
+        const imageSize = Math.round(rotatedUrl.length * 0.75 / 1024);
+        console.log(`[Print] ${label} Capture & Rotate: ${captureTime}ms (~${imageSize}KB)`);
+        console.log(`[Print] 🚀 Sending: printer=${selectedPrinter}, margin=${marginOffset}mm, width=${w}mm, length=${h}mm`);
 
         // 로컬 브릿지 인쇄 시도
         try {
@@ -1161,7 +1253,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               printer_name: selectedPrinter,
-              image_base64: dataUrl,
+              image_base64: rotatedUrl,
               width_mm: w,
               length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
               media_type: mediaType,
@@ -1475,8 +1567,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             <label className="text-xs text-slate-400 block mb-1">프리셋</label>
             <select 
               value={ribbonType} 
-              onChange={e => setRibbonType(e.target.value)}
-              className="w-full p-2 rounded-lg text-sm"
+              onChange={e => {
+                const selected = RIBBON_TYPES.find(t => t.id === e.target.value);
+                if (selected) {
+                  setRibbonType(selected.id);
+                  setWidth(selected.width);
+                  setLength(selected.length);
+                  setLace(selected.lace || 0);
+                  setMarginTop(selected.marginTop || 0);
+                  setMarginBottom(selected.marginBottom || 0);
+                  setMarginOffset(selected.marginOffset || 0);
+                }
+              }}
+              className="w-full p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
             >
               {RIBBON_TYPES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
