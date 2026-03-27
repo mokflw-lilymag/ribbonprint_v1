@@ -11,7 +11,7 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION    = '7.1';
+const VERSION    = '7.2';
 const PORT       = 8000;
 const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -453,7 +453,7 @@ app.post('/api/update', (_req, res) => {
     'taskkill /F /IM launch_service.exe >nul 2>&1',
     '',
     'echo Downloading latest version...',
-    `powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${UPDATE_URL}' -OutFile 'update.zip' -TimeoutSec 60"`,
+    `powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $ts = (Get-Date -UFormat %%s); $url = '${UPDATE_URL}?t=' + $ts; Invoke-WebRequest -Uri $url -OutFile 'update.zip' -TimeoutSec 120"`,
     '',
     'if not exist update.zip (',
     '  echo Download failed!',
