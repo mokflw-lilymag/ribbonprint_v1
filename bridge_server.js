@@ -456,42 +456,44 @@ app.post('/api/update', (req, res) => {
   console.log(`\n> 📥 UPDATE INITIATED: Downloading new version from GitHub...`);
   
   const batPath = path.join(process.cwd(), 'updater.bat');
-  const batLogic = `@echo off
-echo ==============================================
-echo RibbonBridge Auto Updater (v6.1+)
-echo ==============================================
-echo Please wait... Waiting for server to stop...
-timeout /t 2 /nobreak >nul
-taskkill /F /IM sys_service.exe >nul 2>&1
-taskkill /F /IM launch_service.exe >nul 2>&1
+  const lines = [
+    '@echo off',
+    'echo ==============================================',
+    'echo RibbonBridge Auto Updater',
+    'echo ==============================================',
+    'echo Please wait...',
+    'timeout /t 2 /nobreak >nul',
+    'taskkill /F /IM sys_service.exe >nul 2>&1',
+    'taskkill /F /IM launch_service.exe >nul 2>&1',
+    '',
+    'echo Downloading latest version...',
+    "powershell -Command \"[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip' -OutFile 'update.zip' -TimeoutSec 60\"",
+    '',
+    'if not exist update.zip (',
+    '  echo Download failed!',
+    '  start "" "launch_service.exe"',
+    '  exit /b',
+    ')',
+    '',
+    'echo Extracting...',
+    "powershell -Command \"Expand-Archive -Path 'update.zip' -DestinationPath 'upd_tmp' -Force\"",
+    '',
+    'echo Applying update...',
+    'copy /Y upd_tmp\\*.exe . >nul 2>&1',
+    'copy /Y upd_tmp\\*.json . >nul 2>&1',
+    'for /d %%D in (upd_tmp\\*) do (',
+    '  copy /Y "%%D\\*.exe" "." >nul 2>&1',
+    '  copy /Y "%%D\\*.json" "." >nul 2>&1',
+    ')',
+    'if exist upd_tmp rmdir /S /Q upd_tmp',
+    'if exist update.zip del update.zip',
+    '',
+    'echo Starting new version...',
+    'start "" "launch_service.exe"',
+    '(goto) 2>nul & del "%~f0"'
+  ];
 
-echo Downloading latest version from cloud...
-powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip' -OutFile 'update.zip' -TimeoutSec 30"
-
-echo Extracting update...
-powershell -Command "Expand-Archive -Path 'update.zip' -DestinationPath 'upd_tmp' -Force"
-
-echo Applying update...
-:: Navigate the extracted folder structure to find the system files
-:: ZIP contains: RibbonBridge_Setup/system/* or just system/*
-if exist "upd_tmp\\system" (
-  xcopy /Y /E "upd_tmp\\system\\*" "." >nul
-) else (
-  :: Try nested folder structure
-  for /d %%D in (upd_tmp\\*) do (
-    if exist "%%D\\system" (
-      xcopy /Y /E "%%D\\system\\*" "." >nul
-    )
-  )
-)
-if exist upd_tmp rmdir /S /Q upd_tmp
-if exist update.zip del update.zip
-
-echo Starting new version...
-start "" "launch_service.exe"
-(goto) 2>nul & del "%~f0"`;
-
-  fs.writeFileSync(batPath, batLogic);
+  fs.writeFileSync(batPath, lines.join('\r\n'));
   
   setTimeout(() => {
     const childProcess = spawn('cmd.exe', ['/c', batPath], {
