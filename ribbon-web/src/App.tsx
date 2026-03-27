@@ -18,7 +18,8 @@ import {
   Eye,
   Shield,
   Menu,
-  X
+  X,
+  Upload
 } from 'lucide-react';
 import { FontManagerDialog } from './FontManagerDialog';
 import { TemplateManagerDialog } from './TemplateManagerDialog';
@@ -377,11 +378,14 @@ interface RibbonCanvasProps {
   onClick?: () => void;
   isPrintMode?: boolean;
   marginOffset?: number;
+  shopLogo?: string | null;
+  printLogo?: boolean;
 }
 
 const RibbonCanvas = ({ 
   text, fontConfig, ratioX, ratioY, width, lace, length, marginTop, marginBottom, 
-  rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false, marginOffset = 0
+  rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false, marginOffset = 0,
+  shopLogo = null, printLogo = false
 }: RibbonCanvasProps) => {
   // Parse lines
   const lines = text.split('\n').filter(l => l.trim() !== '');
@@ -744,6 +748,27 @@ const RibbonCanvas = ({
             );
           })}
         </div>
+
+        {/* --- SHOP LOGO INJECTION --- */}
+        {printLogo && shopLogo && (
+            <div 
+              className="absolute left-0 right-0 flex justify-center items-start pointer-events-none"
+              style={{
+                top: `${(length - marginBottom + 5) * scaleRatio}px`,
+                transform: `translateX(${marginOffset * scaleRatio}px)`,
+                height: `${Math.max(0, marginBottom - 10) * scaleRatio}px`,
+                paddingLeft: `${lace * scaleRatio}px`,
+                paddingRight: `${lace * scaleRatio}px`
+              }}
+            >
+               <img 
+                 crossOrigin="anonymous"
+                 src={shopLogo} 
+                 alt="Logo" 
+                 style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+               />
+            </div>
+        )}
       </div>
     </div>
   );
@@ -851,6 +876,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
   const [phraseCategories, setPhraseCategories] = useState(DEFAULT_PHRASE_CATEGORIES);
+
+  // Shop Logo State
+  const [shopLogo, setShopLogo] = useState<string | null>(null);
+  const [printLogo, setPrintLogo] = useState<boolean>(false);
 
   // Panning State
   const [isDragging, setIsDragging] = useState(false);
@@ -976,6 +1005,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
     // Auto-Pair Cloud Print Agent with Local Bridge
     if (session?.user?.id) {
+       if ((session.user as any)?.user_metadata?.shop_logo) {
+         setShopLogo((session.user as any).user_metadata.shop_logo);
+         setPrintLogo(true);
+       }
        fetch('http://localhost:8000/api/pair', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
@@ -986,6 +1019,22 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     }
   }, [session?.user?.id]);
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      setShopLogo(base64);
+      setPrintLogo(true);
+      if (session?.user) {
+        await supabase.auth.updateUser({
+          data: { shop_logo: base64 }
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handlePrint = async () => {
     // 구독 상태 확인 (관리자는 항상 허용)
@@ -1497,6 +1546,42 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <span className="text-[10px] text-slate-500">R</span>
             </div>
           </div>
+          <div className="pt-2 border-t border-slate-700/50">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                🏪 매장 로고 <span className="text-[10px] text-slate-500">(하단 5mm 아래)</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {shopLogo && (
+                  <button 
+                    onClick={() => {
+                        setShopLogo(null);
+                        setPrintLogo(false);
+                        if (session?.user) supabase.auth.updateUser({ data: { shop_logo: null } });
+                    }} 
+                    className="text-[10px] text-red-500 font-bold hover:text-red-400"
+                  >
+                    삭제
+                  </button>
+                )}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
+                  <div className="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+            </div>
+            
+            {!shopLogo ? (
+              <label className="flex items-center justify-center w-full p-2 mt-1 border border-dashed border-slate-600 rounded-lg cursor-pointer hover:bg-slate-800 transition">
+                <span className="text-xs text-slate-400 flex items-center gap-2"><Upload size={14}/> 로고 이미지 등록 (PNG)</span>
+                <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleLogoUpload} />
+              </label>
+            ) : (
+                <div className="flex justify-center mt-1 p-2 bg-slate-800 rounded-lg">
+                    <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain bg-white rounded px-2" />
+                </div>
+            )}
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-slate-400 block mb-1">상단</label>
@@ -1861,7 +1946,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={leftRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset}
+                      scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                     />
                   </div>
                 )}
@@ -1871,7 +1956,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset}
+                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                     />
                   </div>
                 )}
@@ -1882,7 +1967,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset}
+                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                       />
                     </div>
                     {/* Middle Connection Line */}
@@ -1891,7 +1976,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset}
+                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                     />
                   </div>
                 )}
@@ -1902,7 +1987,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset}
+                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                       />
                     </div>
                     <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
@@ -1910,7 +1995,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={rightRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset}
+                        scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                       />
                     </div>
                   </div>
@@ -1928,14 +2013,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                 width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                 rotatedIds={leftRotated} onCharClick={(id) => toggleRotation(id, 'left')}
-                scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'} marginOffset={marginOffset}
+                scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'} marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                 onClick={() => setActiveSide('left')} side="left"
               />
               <RibbonCanvas 
                 text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                 width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                 rotatedIds={rightRotated} onCharClick={(id) => toggleRotation(id, 'right')}
-                scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'} marginOffset={marginOffset}
+                scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'} marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
                 onClick={() => setActiveSide('right')} side="right"
               />
             </div>
