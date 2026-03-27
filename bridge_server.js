@@ -451,7 +451,7 @@ rmdir /S /Q upd_tmp
 del update.zip
 
 echo Starting new version...
-start "" "launch.vbs"
+start "" "launch_service.exe"
 (goto) 2>nul & del "%~f0"`;
 
   fs.writeFileSync(batPath, batLogic);
