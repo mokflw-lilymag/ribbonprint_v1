@@ -109,7 +109,7 @@ function getEngineStrategy(brand) {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
-    version: '6.1',
+    version: '6.2',
     message: 'RibbonBridge Universal Engine Active',
     engines: {
       epson_escp: HAS_EPSON,
@@ -260,29 +260,46 @@ app.post('/api/print_image', async (req, res) => {
 
     // 2. Detect brand & strategy
     const cached = cachedPrinterInfo[printer_name];
-    const brand = cached ? cached.brand : detectBrand(printer_name, '');
-    const strategy = getEngineStrategy(brand);
-
-    // 2.5 Find preset for this printer model
+    let detectedBrand = cached ? cached.brand : detectBrand(printer_name, '');
+    
+    // 2.5 Find preset & Merge Settings
     const preset = findPreset(printer_name);
+    
+    // [Fix] If brand detection missed it but preset has a brand, use that!
+    if ((detectedBrand === 'other' || !detectedBrand) && preset.brand) {
+      detectedBrand = preset.brand;
+    }
+    const brand = detectedBrand;
+    const strategy = getEngineStrategy(brand);
+    
     const leftMargin = preset.leftMargin || 34.5;
     const userOffset = parseFloat(margin_offset_mm) || 0;
-    const marginCenter = leftMargin + (width_mm / 2.0) + userOffset;
+    
+    // effectiveLeftMargin is the physical distance from head 0 point to the ribbon's left edge
+    const effectiveLeftMargin = leftMargin + userOffset;
+    
+    // marginCenter is used by Raw engines (ESC/P, PCL5)
+    const marginCenter = effectiveLeftMargin + (width_mm / 2.0);
+
+    // [Fix] Determine final engine (Preset preference > Brand heuristic)
+    let finalEngine = strategy.engine;
+    if (preset.engine && preset.engine !== 'gdi') {
+       if (preset.engine === 'escp' && HAS_EPSON) finalEngine = 'escp';
+       if (preset.engine === 'pcl5' && HAS_HP) finalEngine = 'pcl5';
+    }
 
     console.log(`[PRINT] ─── Job ${jobId} ──────────────────`);
     console.log(`[PRINT] Printer: ${printer_name}`);
-    console.log(`[PRINT] Brand: ${brand.toUpperCase()}`);
-    console.log(`[PRINT] Engine: ${strategy.label}`);
-    console.log(`[PRINT] Preset: ${preset.matchedModel} (leftMargin: ${leftMargin}mm)`);
-    console.log(`[PRINT] User Offset: ${userOffset > 0 ? '+' : ''}${userOffset}mm`);
-    console.log(`[PRINT] Margin Center: ${marginCenter.toFixed(1)}mm (${leftMargin} + ${width_mm}/2 + ${userOffset})`);
+    console.log(`[PRINT] Brand: ${brand.toUpperCase()} | Engine: ${finalEngine}`);
+    console.log(`[PRINT] Preset: ${preset.matchedModel} (Base: ${leftMargin}mm, UserOffset: ${userOffset}mm)`);
+    console.log(`[PRINT] Eff. Left Margin: ${effectiveLeftMargin.toFixed(1)}mm | Margin Center: ${marginCenter.toFixed(1)}mm`);
     console.log(`[PRINT] Size: ${width_mm}x${length_mm}mm | Image: ${fileSizeKB}KB`);
 
     // 3. Route to appropriate engine
-    if (strategy.engine === 'escp' || strategy.engine === 'pcl5') {
-      // ── Native RAW Engine (ESC/P or PCL5) ──
-      // 5th argument = margin_center_mm (프린트헤드 0점 → 리본 중심 거리)
-      const command = `"${strategy.agent}" "${printer_name}" "${tmpFilePath}" ${width_mm} ${length_mm} ${marginCenter.toFixed(1)}`;
+    if (finalEngine === 'escp' || finalEngine === 'pcl5') {
+      const agent = (finalEngine === 'escp') ? EPSON_AGENT : HP_AGENT;
+      // 5th argument = margin_center_mm
+      const command = `"${agent}" "${printer_name}" "${tmpFilePath}" ${width_mm} ${length_mm} ${marginCenter.toFixed(1)}`;
       
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
@@ -295,11 +312,11 @@ app.post('/api/print_image', async (req, res) => {
 
           if (error) {
             const errMsg = (stderr || stdout || error.message).trim();
-            console.error(`[PRINT] ${strategy.engine.toUpperCase()} Error: ${errMsg}`);
+            console.error(`[PRINT] ${finalEngine.toUpperCase()} Error: ${errMsg}`);
             
             // Native engine failed → try GDI fallback
             console.log(`[PRINT] ⚠️ Native engine failed, attempting GDI fallback...`);
-            printViaGDI(printer_name, tmpFilePath, width_mm, length_mm, jobId)
+            printViaGDI(printer_name, tmpFilePath, width_mm, length_mm, jobId, effectiveLeftMargin)
               .then(() => {
                 console.log(`[PRINT] ✅ GDI Fallback succeeded for ${jobId}`);
                 resolve();
@@ -311,20 +328,21 @@ app.post('/api/print_image', async (req, res) => {
           }
 
           if (stdout && stdout.includes('SUCCESS')) {
-            console.log(`[PRINT] ✅ ${strategy.engine.toUpperCase()} Success`);
+            console.log(`[PRINT] ✅ ${finalEngine.toUpperCase()} Success`);
             resolve();
           } else {
             console.error(`[PRINT] Unexpected output: ${stdout}`);
-            reject(new Error(`${strategy.engine} failed: ${(stdout || 'No output').trim()}`));
+            reject(new Error(`${finalEngine} failed: ${(stdout || 'No output').trim()}`));
           }
         });
       });
 
-      return res.json({ status: 'success', method: strategy.engine, brand });
+      return res.json({ status: 'success', method: finalEngine, brand });
 
     } else {
       // ── GDI Fallback ──
-      await printViaGDI(printer_name, tmpFilePath, width_mm, length_mm, jobId);
+      // [Fix] Pass effectiveLeftMargin to GDI
+      await printViaGDI(printer_name, tmpFilePath, width_mm, length_mm, jobId, effectiveLeftMargin);
       return res.json({ status: 'success', method: 'gdi', brand });
     }
 
@@ -336,7 +354,7 @@ app.post('/api/print_image', async (req, res) => {
 });
 
 // ─── GDI PrintDocument Fallback ──────────────────────────────
-function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId) {
+function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId, leftMarginMM = 0) {
   // Re-create temp file if already deleted (for fallback path)
   const tempExists = fs.existsSync(imagePath);
   
@@ -348,6 +366,7 @@ function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId) {
       $imagePath = '${(tempExists ? imagePath : '').replace(/\\/g, '\\\\').replace(/'/g, "''")}'
       $widthMM = ${widthMM}
       $lengthMM = ${lengthMM}
+      $leftMarginMM = ${leftMarginMM}
       
       if (-not (Test-Path $imagePath)) {
         Write-Error "Image file not found: $imagePath"
@@ -368,7 +387,13 @@ function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId) {
         # Custom paper size in 100ths of an inch
         $w100 = [int]($widthMM / 25.4 * 100)
         $h100 = [int]($lengthMM / 25.4 * 100)
-        $customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonCustom", $w100, $h100)
+        $offsetX100 = [int]($leftMarginMM / 25.4 * 100)
+        
+        # We set the total PaperWidth to include the offset area (Physical feeding width)
+        # Most ribbon printers feed 100mm wide paper
+        $totalWidth100 = $offsetX100 + $w100
+        
+        $customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonCustom", $totalWidth100, $h100)
         $pd.DefaultPageSettings.PaperSize = $customPaper
         $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
         $pd.DefaultPageSettings.Landscape = $false
@@ -377,7 +402,8 @@ function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId) {
         $handler = {
           param($sender, $e)
           if (-not $printed) {
-            $destRect = New-Object System.Drawing.Rectangle(0, 0, $e.PageBounds.Width, $e.PageBounds.Height)
+            # Draw with horizontal offset for exact alignment
+            $destRect = New-Object System.Drawing.Rectangle($offsetX100, 0, $w100, $h100)
             $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $e.Graphics.DrawImage($img, $destRect)
             $printed = $true
@@ -471,7 +497,7 @@ start "" "launch_service.exe"
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
-    version: '6.1',
+    version: '6.2',
     uptime: Math.floor(process.uptime()),
     engines: {
       epson_escp: { available: HAS_EPSON, path: EPSON_AGENT },
