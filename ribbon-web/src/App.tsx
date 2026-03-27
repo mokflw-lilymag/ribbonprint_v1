@@ -780,7 +780,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = "7.4";
+const REQUIRED_BRIDGE_VERSION = "7.5";
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -1132,21 +1132,23 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         
         console.log(`[Print] Capturing ${label}... (${w}x${h}mm)`);
         
-        // 고품질 이미지 캡처 (pixelRatio 4 = 고해상도)
-        // 고품질 이미지 캡처 (pixelRatio 3 = 성능/품질 타협점)
-        // [Optimized] 폰트 대량 로딩 시 발생하는 net::ERR_INSUFFICIENT_RESOURCES 방지
+        const captureStart = Date.now();
+        
+        // [Turbo Mode] pixelRatio를 2.2로 조정하여 데이터 크기를 획기적으로 줄였습니다. 
+        // 360dpi 프린터에서 약 200dpi 수준의 결과물을 생성하며, 이는 리본 텍스트 인쇄에 최적입니다.
         const dataUrl = await toPng(ref.current, {
-          pixelRatio: 3, 
+          pixelRatio: 2.2, 
           backgroundColor: '#ffffff',
           cacheBust: false,
           skipAutoScale: true,
           style: {
-            transform: 'none', // 캡처 시 CSS transform 제거
+            transform: 'none', 
           }
         });
 
-        const imageSize = Math.round(dataUrl.length * 0.75 / 1024); // approx KB
-        console.log(`[Print] Image captured: ~${imageSize}KB`);
+        const captureTime = Date.now() - captureStart;
+        const imageSize = Math.round(dataUrl.length * 0.75 / 1024);
+        console.log(`[Print] ${label} Capture: ${captureTime}ms (~${imageSize}KB)`);
 
         // 로컬 브릿지 인쇄 시도
         try {

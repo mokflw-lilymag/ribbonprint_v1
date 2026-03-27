@@ -11,7 +11,7 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION    = '7.4';
+const VERSION    = '7.5';
 const PORT       = 8000;
 const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -30,7 +30,7 @@ const UPDATE_URL  = 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/R
 // ─── App Setup ─────────────────────────────────────────────────
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '70mb' }));
+app.use(express.json({ limit: '200mb' }));
 
 // Ensure tmp directory
 if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
@@ -271,10 +271,12 @@ app.post('/api/print_image', async (req, res) => {
   const tmpFile = path.join(TMP_DIR, `${jobId}.png`);
 
   try {
+    const start = Date.now();
     // 1. Decode & Save
     const rawData = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
     if (!rawData) return res.json({ status: 'error', message: 'Invalid image_base64 format' });
     fs.writeFileSync(tmpFile, Buffer.from(rawData, 'base64'));
+    const decodeTime = Date.now() - start;
     const fileSizeKB = Math.round(fs.statSync(tmpFile).size / 1024);
 
     // 2. Brand & Preset
@@ -282,47 +284,27 @@ app.post('/api/print_image', async (req, res) => {
     let brand = cached?.brand || detectBrand(printer_name, '');
     const preset = findPreset(printer_name);
 
-    // Preset brand overrides heuristic if heuristic was generic
-    if ((brand === 'other') && preset.brand) brand = preset.brand;
-
     const strategy = getEngineStrategy(brand, printer_name);
-    const leftMargin = preset.leftMargin || 34.5;
-    const userOffset = parseFloat(margin_offset_mm) || 0;
-    const effLeftMargin = leftMargin + userOffset;
+    const effLeftMargin = (preset.leftMargin || 34.5) + (parseFloat(margin_offset_mm) || 0);
     const marginCenter  = effLeftMargin + (width_mm / 2.0);
 
-    // Preset can force a specific engine
     let finalEngine = strategy.engine;
     if (preset.engine === 'escp' && HAS_EPSON) finalEngine = 'escp';
     if (preset.engine === 'pcl5' && HAS_HP)    finalEngine = 'pcl5';
 
-    console.log(`[PRINT] ─── ${jobId} ───`);
-    console.log(`[PRINT] Printer: ${printer_name} | Brand: ${brand} | Engine: ${finalEngine}`);
-    console.log(`[PRINT] Preset: ${preset.matchedModel} | Margin: ${effLeftMargin.toFixed(1)}mm | Size: ${width_mm}×${length_mm}mm | ${fileSizeKB}KB`);
+    console.log(`[PRINT] ${jobId}: ${brand}/${finalEngine} | ${width_mm}x${length_mm}mm | ${fileSizeKB}KB | Decode: ${decodeTime}ms`);
 
     // 3. Execute
     if (finalEngine === 'escp' || finalEngine === 'pcl5') {
       const agent = finalEngine === 'escp' ? EPSON_AGENT : HP_AGENT;
       const cmd = `"${agent}" "${printer_name}" "${tmpFile}" ${width_mm} ${length_mm} ${marginCenter.toFixed(1)}`;
-
-      try {
-        await execNative(cmd, tmpFile);
-        console.log(`[PRINT] ✅ ${finalEngine.toUpperCase()} success`);
-        return res.json({ status: 'success', method: finalEngine, brand });
-      } catch (nativeErr) {
-        console.log(`[PRINT] ⚠️ Native failed (${nativeErr.message}), trying GDI…`);
-        try {
-          await printViaGDI(printer_name, tmpFile, width_mm, length_mm, jobId, effLeftMargin);
-          console.log(`[PRINT] ✅ GDI fallback success`);
-          return res.json({ status: 'success', method: 'gdi_fallback', brand });
-        } catch (gdiErr) {
-          throw new Error(`Native(${nativeErr.message}) + GDI(${gdiErr.message}) both failed`);
-        }
-      }
+      await execNative(cmd, tmpFile);
+      console.log(`[PRINT] ✅ ${jobId} Native Success (${Date.now() - start}ms)`);
+      return res.json({ status: 'success', method: finalEngine, time: Date.now() - start });
     } else {
       await printViaGDI(printer_name, tmpFile, width_mm, length_mm, jobId, effLeftMargin);
-      console.log(`[PRINT] ✅ GDI success`);
-      return res.json({ status: 'success', method: 'gdi', brand });
+      console.log(`[PRINT] ✅ ${jobId} GDI Success (${Date.now() - start}ms)`);
+      return res.json({ status: 'success', method: 'gdi', time: Date.now() - start });
     }
   } catch (err) {
     console.error(`[PRINT] ❌ ${jobId}: ${err.message}`);
