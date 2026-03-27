@@ -11,7 +11,7 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION    = '7.5';
+const VERSION    = '7.6';
 const PORT       = 8000;
 const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -373,21 +373,23 @@ try {
   $offsetX   = [int]($leftMM   / 25.4 * 100)
 
   # [CRITICAL FIX]
-  # EPSON 및 대부분의 데스크탑 프린터 드라이버는 너비가 89mm(3.5인치) 미만인 PaperSize 를
-  # API를 통해 받으면 인쇄 작업을 소리없이(드라이버 단에서) 폐기해버립니다.
-  # 따라서 논리적 용지 너비를 항상 A4 너비인 210mm (약 827)로 고정하여 드라이버를 속이고,
-  # 출력할 이미지는 여백(offsetX)만큼 띄워서 그립니다.
-  $driverSafeWidth = 827 # 210mm in hundredths of an inch
-
-  $paper = New-Object System.Drawing.Printing.PaperSize("RibbonCustom", $driverSafeWidth, $h100)
-  $pd.DefaultPageSettings.PaperSize  = $paper
-  $pd.DefaultPageSettings.Margins    = New-Object System.Drawing.Printing.Margins(0,0,0,0)
-  $pd.DefaultPageSettings.Landscape  = $false
+  # EPSON 데스크탑 드라이버는 'Custom' 용지 대신 표준 'A4'를 사용할 때 끊김 없는 즉시 출력이 가능합니다.
+  $driverSafeWidth = 827 
+  $a4 = $pd.PrinterSettings.PaperSizes | Where-Object { ($_.Kind -eq 'A4') -or ($_.PaperName -like '*A4*') } | Select-Object -First 1
+  if ($a4) {
+      $pd.DefaultPageSettings.PaperSize = $a4
+  } else {
+      $pd.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize("A4_Safe", $driverSafeWidth, 1169)
+  }
+  
+  $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+  $pd.DefaultPageSettings.Landscape = $false
 
   $printed = $false
   $handler = {
     param($sender, $e)
     if (-not $printed) {
+      # 100분의 1인치 단위로 출력 영역을 계산합니다.
       $dest = New-Object System.Drawing.Rectangle($offsetX, 0, $w100, $h100)
       $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
       $e.Graphics.DrawImage($img, $dest)

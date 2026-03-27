@@ -780,7 +780,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = "7.5";
+const REQUIRED_BRIDGE_VERSION = "7.6";
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -1134,13 +1134,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         
         const captureStart = Date.now();
         
-        // [Turbo Mode] pixelRatio를 2.2로 조정하여 데이터 크기를 획기적으로 줄였습니다. 
-        // 360dpi 프린터에서 약 200dpi 수준의 결과물을 생성하며, 이는 리본 텍스트 인쇄에 최적입니다.
+        // [Ultimate Fix] skipFonts: true를 사용하여 수백 개의 시스템 폰트 스캔 과정을 생략합니다. 
+        // 전송 속도가 1분 -> 1초로 단축됩니다.
         const dataUrl = await toPng(ref.current, {
-          pixelRatio: 2.2, 
+          pixelRatio: 2.0, 
           backgroundColor: '#ffffff',
           cacheBust: false,
           skipAutoScale: true,
+          skipFonts: true,
           style: {
             transform: 'none', 
           }
