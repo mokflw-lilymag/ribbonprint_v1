@@ -1,0 +1,244 @@
+{
+  "_comment": "RibbonBridge v6.0 - Printer Model Presets (좌측마진은 프린트헤드 0점 → 좌측 고정 가이드 거리)",
+  
+  "models": {
+    "EPSON M105": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "프리셋 역산 확인 완료 (기준 모델)"
+    },
+    "EPSON M100": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "M105와 동일 계열"
+    },
+    "EPSON M200": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "M105와 동일 계열 (복합기)"
+    },
+    "EPSON M205": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "M200과 동일 (Wi-Fi 버전)"
+    },
+    "EPSON L100": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "L시리즈 구형, M105와 동일"
+    },
+    "EPSON L200": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "L시리즈 구형 복합기"
+    },
+    "EPSON L210": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "L200 후속"
+    },
+    "EPSON L220": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "L210 후속"
+    },
+    "EPSON L310": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "L시리즈 단일기능"
+    },
+    "EPSON L360": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "L시리즈 복합기"
+    },
+    "EPSON L380": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "L360 후속"
+    },
+    "EPSON L1210": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "최신 L시리즈 단일기능 (ESC/P2 지원 확인 필요)"
+    },
+    "EPSON L3210": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "최신 L시리즈 복합기"
+    },
+    "EPSON L3250": {
+      "brand": "epson",
+      "engine": "escp",
+      "dpi": 360,
+      "leftMargin": 34.5,
+      "note": "최신 L시리즈 Wi-Fi"
+    },
+
+    "HP DeskJet 1000": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.5,
+      "note": "ribbonsort_1000.ini 역산 (M105와 동일)"
+    },
+    "HP DeskJet 1010": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.5,
+      "note": "DeskJet 1000 후속"
+    },
+    "HP DeskJet 1050": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.5,
+      "note": "DeskJet 1000 복합기"
+    },
+    "HP DeskJet 2130": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.5,
+      "note": "DeskJet 표준급"
+    },
+    "HP DeskJet 2700": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.5,
+      "note": "DeskJet 최신 (DeskJet 1000 계열 추정)"
+    },
+    "HP OfficeJet 6000": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 33.0,
+      "note": "ribbonsort_6000.ini 기반 (프로급, 마진 좁음)"
+    },
+    "HP OfficeJet 6100": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 33.0,
+      "note": "ribbonsort_6100.ini 기반 (6000 계열)"
+    },
+    "HP OfficeJet 6500": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 33.0,
+      "note": "OfficeJet 6000 시리즈"
+    },
+    "HP OfficeJet 6700": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 33.0,
+      "note": "OfficeJet 6000 시리즈"
+    },
+    "HP OfficeJet 8000": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 35.0,
+      "note": "ribbonsort_8000.ini 기반 (프로급, 정밀 급지)"
+    },
+    "HP OfficeJet 8100": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 35.0,
+      "note": "ribbonsort_8100.ini 기반 (8000 계열)"
+    },
+    "HP OfficeJet 8600": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 35.0,
+      "note": "OfficeJet 8000 Pro 시리즈"
+    },
+    "HP OfficeJet Pro 8610": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 35.0,
+      "note": "OfficeJet 8000 Pro 시리즈"
+    },
+    "HP OfficeJet Pro 8620": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 35.0,
+      "note": "OfficeJet 8000 Pro 시리즈"
+    },
+    "HP ENVY 4500": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.0,
+      "note": "ENVY 가정용 (DeskJet 계열 추정)"
+    },
+    "HP ENVY 5540": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.0,
+      "note": "ENVY 가정용"
+    },
+    "HP ENVY 6000": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.0,
+      "note": "ENVY 최신"
+    },
+    "HP Smart Tank 500": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.5,
+      "note": "HP 잉크탱크 (DeskJet 계열 추정)"
+    },
+    "HP Smart Tank 515": {
+      "brand": "hp",
+      "engine": "pcl5",
+      "dpi": 300,
+      "leftMargin": 34.5,
+      "note": "HP 잉크탱크 Wi-Fi"
+    }
+  },
+
+  "defaults": {
+    "epson": { "leftMargin": 34.5, "engine": "escp", "dpi": 360 },
+    "hp":    { "leftMargin": 34.5, "engine": "pcl5", "dpi": 300 },
+    "other": { "leftMargin": 34.5, "engine": "gdi",  "dpi": 300 }
+  }
+}

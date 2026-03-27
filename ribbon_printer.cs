@@ -149,7 +149,7 @@ public class EpsonESCPBuilder {
 
         SendExt("m", new byte[] { 0x12 }); // Print method
 
-        // 4. HIGH SPEED Raster Data Transmission
+        // 4. HIGH SPEED Raster Data Transmission (LockBits turbo mode)
         SendExt("V", BitConverter.GetBytes((uint)0)); 
 
         int columns = bmp.Width;
@@ -158,17 +158,33 @@ public class EpsonESCPBuilder {
         
         uint horizontalShift = (uint)Math.Round(leftOffsetMM / 25.4 * dpi);
 
+        // === PERFORMANCE: LockBits for direct memory pixel access (10-50x faster than GetPixel) ===
+        BitmapData bmpData = bmp.LockBits(
+            new Rectangle(0, 0, bmp.Width, bmp.Height),
+            ImageLockMode.ReadOnly,
+            PixelFormat.Format32bppArgb
+        );
+        int stride = bmpData.Stride;
+        byte[] pixelBuffer = new byte[Math.Abs(stride) * bmp.Height];
+        Marshal.Copy(bmpData.Scan0, pixelBuffer, 0, pixelBuffer.Length);
+        bmp.UnlockBits(bmpData);
+
         for (int y = 0; y < bmp.Height; y++) {
             byte[] lineData = new byte[bytesPerRow];
             bool lineHasData = false;
+            int rowOffset = y * Math.Abs(stride);
 
             for (int b = 0; b < bytesPerRow; b++) {
                 byte val = 0;
                 for (int bit = 0; bit < 8; bit++) {
                     int x = b * 8 + bit;
                     if (x < bmp.Width) {
-                        Color c = bmp.GetPixel(x, y);
-                        if ((c.R + c.G + c.B) / 3 < 128 && c.A > 128) {
+                        int pixelOffset = rowOffset + x * 4; // ARGB = 4 bytes per pixel
+                        byte blue  = pixelBuffer[pixelOffset];
+                        byte green = pixelBuffer[pixelOffset + 1];
+                        byte red   = pixelBuffer[pixelOffset + 2];
+                        byte alpha = pixelBuffer[pixelOffset + 3];
+                        if ((red + green + blue) / 3 < 128 && alpha > 128) {
                             val |= (byte)(0x80 >> bit);
                             lineHasData = true;
                         }

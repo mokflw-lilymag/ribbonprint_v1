@@ -6,6 +6,7 @@
 
 import win32print
 import win32ui
+import win32gui
 import win32con
 from PIL import Image, ImageDraw, ImageFont
 import os
@@ -330,58 +331,54 @@ class RibbonPrinterBridge:
         return self._print_image_file(image, ribbon_config)
     
     def _print_image_file(self, image: Image.Image, ribbon_config: Dict) -> bool:
-        """이미지 객체를 프린터로 직접 출력 (GDI 방식)"""
+        """이미지 객체를 프린터로 직접 출력 (GDI 방식 - 전문가용 패치 4.0)"""
         try:
             from PIL import ImageWin
-            import win32print
             
             # 리본 규격 가져오기 (mm)
             width_mm = ribbon_config.get('리본넓이', 50)
             length_mm = ribbon_config.get('리본길이', 400)
             
-            # 프린터 핸들 열기
+            # 1. 프린터 핸들 및 기본 설정 획득
             phandle = win32print.OpenPrinter(self.current_printer)
+            pinfo = win32print.GetPrinter(phandle, 2)
+            devmode = pinfo['pDevMode']
             
-            # DevMode (프린터 설정) 가져오기 및 사용자 정의 사이즈 설정
-            # 이는 윈도우 드라이버가 A4/Letter 등 표준 사이즈로 잘라버리는 것을 방지합니다.
-            properties = win32print.GetPrinter(phandle, 2)
-            devmode = properties['pDevMode']
-            
+            # 2. 강제 커스텀 용지 설정 (핵심!)
             # 0.1mm 단위로 설정 (win32print 특성)
-            devmode.PaperSize = 0 # Custom
+            devmode.PaperSize = 0  # DMPAPER_USER
             devmode.PaperWidth = int(width_mm * 10)
             devmode.PaperLength = int(length_mm * 10)
+            # 드라이버에게 우리가 가로/세로/사이즈를 직접 정의했음을 알림
             devmode.Fields |= win32print.DM_PAPERSIZE | win32print.DM_PAPERWIDTH | win32print.DM_PAPERLENGTH
             
-            # 프린터 DC 생성 (사용자 정의 DevMode 적용)
-            hdc = win32ui.CreateDC()
-            hdc.CreatePrinterDC(self.current_printer)
-            # hdc 초기화 시 DevMode 적용은 복잡하므로, 
-            # win32print.OpenPrinter + GetPrinter + CreateDC의 조합이 필요할 수 있으나
-            # 여기서는 기본 해상도를 사용하여 그려준 후 드라이버가 처리하도록 합니다.
+            # 3. DC 생성 (수정된 devmode를 전달하여 드라이버 제약 우회)
+            hdc_handle = win32gui.CreateDC("WINSPOOL", self.current_printer, devmode)
+            hdc = win32ui.CreateDCFromHandle(hdc_handle)
             
-            # 프린터 정보 가져오기 (DPI 등)
+            # 4. 해상도 및 물리적 픽셀 계산
             printer_dpi_x = hdc.GetDeviceCaps(88) # LOGPIXELSX
             printer_dpi_y = hdc.GetDeviceCaps(90) # LOGPIXELSY
             
-            # 물리적 출력 크기 (픽셀)
             phys_width = int(width_mm * printer_dpi_x / 25.4)
             phys_length = int(length_mm * printer_dpi_y / 25.4)
             
-            # 인쇄 작업 시작
-            hdc.StartDoc("RibbonMaker Print Job")
+            # 5. 인쇄 작업 시작
+            job_name = f"RibbonPrint_{int(width_mm)}x{int(length_mm)}mm"
+            hdc.StartDoc(job_name)
             hdc.StartPage()
             
-            # PIL 이미지를 Windows DIB로 변환하여 출력
-            dib = ImageWin.Dib(image)
+            # 6. 이미지 그리기 (물리적 영역에 스케일링하여 투사)
+            dib = ImageWin.Dib(image.convert("RGB"))
             # StretchDIBits 느낌으로 물리적 크기에 맞춰 출력
             dib.draw(hdc.GetHandleOutput(), (0, 0, phys_width, phys_length))
             
             hdc.EndPage()
             hdc.EndDoc()
             hdc.DeleteDC()
+            win32print.ClosePrinter(phandle)
             
-            logger.info(f"Successfully sent {width_mm}x{length_mm}mm image to printer {self.current_printer}")
+            logger.info(f"Expert Print SUCCESS: {width_mm}x{length_mm}mm on {self.current_printer}")
             return True
             
         except Exception as e:

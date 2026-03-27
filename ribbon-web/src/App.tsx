@@ -87,8 +87,16 @@ const FONTS: FontItem[] = [
 function FontSelector({ value, onChange, mode, fonts }: { value: string, onChange: (v: string) => void, mode: FontLang, fonts: FontItem[] }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [hoveredFont, setHoveredFont] = useState<string | null>(null);
   
-  const filteredFonts = fonts.filter(f => f.langs.includes(mode) && (f.name.toLowerCase().includes(search.toLowerCase()) || f.value.toLowerCase().includes(search.toLowerCase())));
+  const filteredFonts = useMemo(() => {
+    return fonts.filter(f => 
+      f.langs.includes(mode) && 
+      (f.name.toLowerCase().includes(search.toLowerCase()) || 
+       f.value.toLowerCase().includes(search.toLowerCase()))
+    );
+  }, [fonts, mode, search]);
+
   const selectedFont = fonts.find(f => f.value === value) || fonts[0] || FONTS[0];
 
   return (
@@ -118,7 +126,9 @@ function FontSelector({ value, onChange, mode, fonts }: { value: string, onChang
              {filteredFonts.map(f => (
                <button
                  key={f.value}
-                 onClick={() => { onChange(f.value); setOpen(false); setSearch(""); }}
+                 onMouseEnter={() => setHoveredFont(f.value)}
+                 onMouseLeave={() => setHoveredFont(null)}
+                 onClick={() => { onChange(f.value); setOpen(false); setSearch(""); setHoveredFont(null); }}
                  className={cn(
                    "flex flex-col text-left px-3 py-3 rounded hover:bg-slate-700 transition-colors cursor-pointer w-full group border-b border-slate-700/50 last:border-0",
                    f.value === value ? "bg-blue-900/40" : ""
@@ -126,7 +136,12 @@ function FontSelector({ value, onChange, mode, fonts }: { value: string, onChang
                >
                  <div className="flex w-full items-center justify-between">
                    <div className="flex flex-col w-full pr-2">
-                     <span className={cn(f.value, "text-[26px] text-white leading-tight mb-1 group-hover:text-blue-300 transition-colors")}>{f.preview}</span>
+                     <span className={cn(
+                       (f.value === value || hoveredFont === f.value) ? f.value : "font-sans", 
+                       "text-[26px] text-white leading-tight mb-1 group-hover:text-blue-300 transition-colors"
+                     )}>
+                       {f.preview}
+                     </span>
                      <span className="text-[12px] text-slate-400 font-sans">{f.name}</span>
                    </div>
                    {f.value === value && <Check className="w-5 h-5 text-blue-400 shrink-0" />}
@@ -361,11 +376,12 @@ interface RibbonCanvasProps {
   isActive?: boolean;
   onClick?: () => void;
   isPrintMode?: boolean;
+  marginOffset?: number;
 }
 
 const RibbonCanvas = ({ 
   text, fontConfig, ratioX, ratioY, width, lace, length, marginTop, marginBottom, 
-  rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false
+  rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false, marginOffset = 0
 }: RibbonCanvasProps) => {
   // Parse lines
   const lines = text.split('\n').filter(l => l.trim() !== '');
@@ -481,6 +497,7 @@ const RibbonCanvas = ({
           style={{
             top: `${marginTop * scaleRatio}px`,
             bottom: `${marginBottom * scaleRatio}px`,
+            transform: `translateX(${marginOffset * scaleRatio}px)`,
           }}
         >
           {lines.map((line, lIdx) => {
@@ -786,6 +803,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [lace, setLace] = useState(5);
   const [marginTop, setMarginTop] = useState(80);
   const [marginBottom, setMarginBottom] = useState(50);
+  const [marginOffset, setMarginOffset] = useState<number>(0);
 
   // Left Ribbon State
   const [leftText, setLeftText] = useState('祝發展');
@@ -979,41 +997,89 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     try {
       setIsPrinting(true);
       
-      const sendJob = async (ref: React.RefObject<HTMLDivElement | null>, w: number, h: number) => {
-        if (!ref.current) return;
+      // 1. Bridge 연결 상태 사전 확인
+      let bridgeOnline = false;
+      try {
+        const healthCheck = await fetch('http://localhost:8000/', { 
+          signal: AbortSignal.timeout(3000) 
+        });
+        const health = await healthCheck.json();
+        bridgeOnline = health.status === 'ok';
+        console.log(`[Print] Bridge status: ${health.status}, version: ${health.version || 'unknown'}`);
+      } catch {
+        console.log('[Print] Local bridge not available - will use cloud relay');
+      }
+      
+      const sendJob = async (ref: React.RefObject<HTMLDivElement | null>, w: number, h: number, label: string) => {
+        if (!ref.current) {
+          throw new Error(`캡처 영역(${label})을 찾을 수 없습니다.`);
+        }
         
+        console.log(`[Print] Capturing ${label}... (${w}x${h}mm)`);
+        
+        // 고품질 이미지 캡처 (pixelRatio 4 = 고해상도)
         const dataUrl = await toPng(ref.current, {
-          pixelRatio: 3, 
+          pixelRatio: 4,
           backgroundColor: '#ffffff',
+          cacheBust: true,
+          skipAutoScale: true,
+          style: {
+            transform: 'none', // 캡처 시 CSS transform 제거하여 올바른 방향 보장
+          }
         });
 
-        // 1. Try Local Bridge first (Fastest)
-        try {
-          const response = await fetch('http://localhost:8000/api/print_image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              printer_name: selectedPrinter,
-              image_base64: dataUrl,
-              width_mm: w,
-              length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
-              media_type: mediaType,
-              cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
-              print_quality: printQuality
-            }),
-          });
+        const imageSize = Math.round(dataUrl.length * 0.75 / 1024); // approx KB
+        console.log(`[Print] Image captured: ~${imageSize}KB`);
 
-          if (response.ok) {
-            const result = await response.json();
-            if (result.status === 'success') return; // Local print ok
+        // 로컬 브릿지 인쇄 시도
+        if (bridgeOnline) {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+            
+            const response = await fetch('http://localhost:8000/api/print_image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                printer_name: selectedPrinter,
+                image_base64: dataUrl,
+                width_mm: w,
+                length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
+                media_type: mediaType,
+                cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
+                print_quality: printQuality,
+                margin_offset_mm: marginOffset
+              }),
+              signal: controller.signal
+            });
+
+            clearTimeout(timeout);
+
+            if (response.ok) {
+              const result = await response.json();
+              if (result.status === 'success') {
+                console.log(`[Print] ✅ Local print success (${result.method || 'native'})`);
+                return; // 성공!
+              }
+              // 로컬 실패 시 에러 메시지 표시하고 클라우드로 폴백하지 않음
+              throw new Error(result.message || '인쇄 실패');
+            } else {
+              throw new Error(`Bridge HTTP ${response.status}`);
+            }
+          } catch (err: any) {
+            if (err.name === 'AbortError') {
+              throw new Error('인쇄 시간이 초과되었습니다 (60초). 프린터 연결을 확인해주세요.');
+            }
+            // 진짜 에러 (브릿지는 연결되었는데 인쇄 실패)
+            console.error(`[Print] Local bridge error: ${err.message}`);
+            throw err;
           }
-        } catch (err) {
-          console.log("Local bridge not found, falling back to Cloud Relay...");
         }
 
-        // 2. Cloud Relay Fallback (For Mobile or Remote)
+        // 클라우드 릴레이 폴백 (로컬 브릿지 없을 때만)
         if (!session?.user?.id) throw new Error("인쇄를 위해 로그인이 필요합니다.");
 
+        console.log('[Print] Using Cloud Relay...');
         const { error: cloudError } = await supabase.from('print_jobs').insert({
           user_id: session.user.id,
           printer_name: selectedPrinter,
@@ -1027,31 +1093,39 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           throw new Error(`클라우드 출력 전송 실패: ${cloudError.message}`);
         }
         
-        console.log("Cloud print job queued successfully.");
+        console.log('[Print] ☁️ Cloud print job queued');
       };
 
       if (printTarget === 'left') {
-        await sendJob(separateLeftRef, width, length);
-        alert("경조사 인쇄 작업이 전송되었습니다.");
+        await sendJob(separateLeftRef, width, length, '경조사');
+        alert("✅ 경조사 인쇄 완료!");
       } else if (printTarget === 'right') {
-        await sendJob(separateRightRef, width, length);
-        alert("보내는이 인쇄 작업이 전송되었습니다.");
+        await sendJob(separateRightRef, width, length, '보내는이');
+        alert("✅ 보내는이 인쇄 완료!");
       } else {
         // 양쪽 모두
         if (printLayout === 'connected') {
-          await sendJob(connectedPrintRef, width, length * 2);
-          alert("양쪽 연결 인쇄 작업이 전송되었습니다.");
+          await sendJob(connectedPrintRef, width, length * 2, '양쪽연결');
+          alert("✅ 양쪽 연결 인쇄 완료!");
         } else {
-          await sendJob(separateLeftRef, width, length);
-          await new Promise(r => setTimeout(r, 1000));
-          await sendJob(separateRightRef, width, length);
-          alert("각각 인쇄 작업(총 2건)이 전송되었습니다.");
+          await sendJob(separateLeftRef, width, length, '경조사');
+          // 프린터가 첫 번째 작업을 처리할 시간 부여
+          await new Promise(r => setTimeout(r, 2000));
+          await sendJob(separateRightRef, width, length, '보내는이');
+          alert("✅ 각각 인쇄 완료! (총 2건)");
         }
       }
 
     } catch (error: any) {
-       console.error("Print error:", error);
-       alert("인쇄 중 오류가 발생했습니다: " + error.message);
+       console.error("[Print] Error:", error);
+       
+       // 사용자 친화적 에러 메시지
+       let userMessage = error.message || '알 수 없는 오류';
+       if (userMessage.includes('fetch') || userMessage.includes('network')) {
+         userMessage = '프린터 브릿지에 연결할 수 없습니다.\n\n💡 해결방법:\n1. RibbonBridge가 실행 중인지 확인\n2. 방화벽 설정 확인\n3. 프린터가 켜져있는지 확인';
+       }
+       
+       alert("❌ 인쇄 오류: " + userMessage);
     } finally {
        setIsPrinting(false);
 
@@ -1360,7 +1434,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <label className="text-xs text-slate-400">출력 프린터</label>
               <div className="flex items-center gap-1.5">
                 <div className={cn("w-2 h-2 rounded-full animate-pulse", printers.length > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500")} />
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tighter">Live Agent</span>
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tighter">Bridge v6.0</span>
               </div>
             </div>
             <div className="flex gap-2">
@@ -1370,9 +1444,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 className="flex-1 p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2"
               >
                 {printers.length === 0 && <option value="">☁️ 매장 기본 프린터로 원격 전송</option>}
-                {printers.map(p => (
+                {printers.map((p: any) => (
                   <option key={p.name} value={p.name}>
-                    {p.name} {p.status === 'Ready' ? '✅' : '⚠️'}
+                    {p.brand === 'epson' ? '🟢' : p.brand === 'hp' ? '🔵' : '⚪'} {p.name} {p.status === 'Ready' ? '✅' : '⚠️'}
                   </option>
                 ))}
               </select>
@@ -1387,6 +1461,40 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               >
                 <RotateCw size={14} className={isPrinting ? "animate-spin" : ""} />
               </button>
+            </div>
+            {/* Engine Badge */}
+            {printers.length > 0 && (() => {
+              const selected = printers.find((p: any) => p.name === selectedPrinter);
+              if (!selected) return null;
+              const engineColor = selected.brand === 'epson' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                : selected.brand === 'hp' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                : 'bg-slate-500/15 text-slate-400 border-slate-500/30';
+              return (
+                <div className={`mt-1.5 px-2 py-1 rounded text-[10px] font-medium text-center border ${engineColor}`}>
+                  🔧 {selected.engine || 'GDI Fallback'}
+                </div>
+              );
+            })()}
+          </div>
+          <div className="pt-2 border-t border-slate-700/50">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                ↔️ 좌우 보정(M) <span className="text-[10px] text-slate-500">(±2mm)</span>
+              </label>
+              <span className={cn("text-xs font-bold", marginOffset === 0 ? "text-slate-500" : "text-blue-400")}>
+                {marginOffset > 0 ? `+${marginOffset}` : marginOffset}mm
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-500">L</span>
+              <input 
+                type="range" 
+                min="-2" max="2" step="0.5" 
+                value={marginOffset}
+                onChange={e => setMarginOffset(Number(e.target.value))}
+                className="flex-1 accent-blue-500"
+              />
+              <span className="text-[10px] text-slate-500">R</span>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -1753,7 +1861,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={leftRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={leftSpacing} side="left"
+                      scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset}
                     />
                   </div>
                 )}
@@ -1763,7 +1871,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right"
+                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset}
                     />
                   </div>
                 )}
@@ -1774,7 +1882,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left"
+                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset}
                       />
                     </div>
                     {/* Middle Connection Line */}
@@ -1783,7 +1891,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right"
+                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset}
                     />
                   </div>
                 )}
@@ -1794,7 +1902,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left"
+                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset}
                       />
                     </div>
                     <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
@@ -1802,7 +1910,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={rightRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={rightSpacing} side="right"
+                        scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset}
                       />
                     </div>
                   </div>
@@ -1820,14 +1928,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                 width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                 rotatedIds={leftRotated} onCharClick={(id) => toggleRotation(id, 'left')}
-                scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'}
+                scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'} marginOffset={marginOffset}
                 onClick={() => setActiveSide('left')} side="left"
               />
               <RibbonCanvas 
                 text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                 width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                 rotatedIds={rightRotated} onCharClick={(id) => toggleRotation(id, 'right')}
-                scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'}
+                scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'} marginOffset={marginOffset}
                 onClick={() => setActiveSide('right')} side="right"
               />
             </div>
@@ -1921,9 +2029,11 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       />
 
       {/* Hidden Professional Capture Areas (Not visible to user) */}
-      <div style={{ position: 'fixed', left: -5000, top: -5000, pointerEvents: 'none' }}>
+      {/* IMPORTANT: No CSS transforms on ref elements! toPng cannot reliably capture CSS transforms.
+          Rotation is handled post-capture via Canvas API in handlePrint. */}
+      <div style={{ position: 'fixed', left: -9999, top: -9999, pointerEvents: 'none', opacity: 0 }}>
         
-        {/* 1. Connected Strip Mode [L (180 deg) + Line + R] */}
+        {/* 1. Connected Strip Mode [L + Line + R] - printed as continuous strip */}
         <div 
           ref={connectedPrintRef} 
           style={{ 
@@ -1931,42 +2041,48 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             flexDirection: 'column', 
             alignItems: 'center', 
             backgroundColor: 'white',
-            width: `${width * 2}px` // wide enough to avoid clipping during rotation
+            width: `${width * 3}px`
           }}
         >
-          <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
+          {/* Left ribbon (경조사) - reversed order via column-reverse */}
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column-reverse', 
+            width: `${width * 3}px`,
+            backgroundColor: 'white'
+          }}>
             <RibbonCanvas
               text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
               width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
               rotatedIds={leftRotated} onCharClick={() => {}}
-              scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
+              scaleRatio={3} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
             />
           </div>
           {/* Middle Connection Line */}
-          <div style={{ width: `${(width - lace*2) * 2}px`, height: '4px', backgroundColor: 'black' }} />
+          <div style={{ width: `${(width - lace*2) * 3}px`, height: '6px', backgroundColor: 'black' }} />
           <RibbonCanvas
             text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={rightRotated} onCharClick={() => {}}
-            scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
+            scaleRatio={3} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
           />
         </div>
 
-        {/* 2. Separate Mode (Both rotated 180 as per user drawing) */}
-        <div ref={separateLeftRef} style={{ backgroundColor: 'white', transform: 'rotate(180deg)' }}>
+        {/* 2. Separate Mode - NO CSS transform, clean capture */}
+        <div ref={separateLeftRef} style={{ backgroundColor: 'white' }}>
           <RibbonCanvas
             text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={leftRotated} onCharClick={() => {}}
-            scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
+            scaleRatio={3} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
           />
         </div>
-        <div ref={separateRightRef} style={{ backgroundColor: 'white', transform: 'rotate(180deg)' }}>
+        <div ref={separateRightRef} style={{ backgroundColor: 'white' }}>
           <RibbonCanvas 
             text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={rightRotated} onCharClick={() => {}}
-            scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
+            scaleRatio={3} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
           />
         </div>
 
