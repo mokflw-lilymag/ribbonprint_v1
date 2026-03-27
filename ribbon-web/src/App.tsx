@@ -2353,7 +2353,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
              try {
                const check = await fetch('http://127.0.0.1:8000/', { signal: AbortSignal.timeout(1500) });
                const res = await check.json();
-               if (res.version === REQUIRED_BRIDGE_VERSION) {
+               if (isVersionOk(res.version)) {
                   clearInterval(pollInterval);
                   setIsUpdating(false);
                   setIsUpdateModalOpen(false);
