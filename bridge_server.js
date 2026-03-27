@@ -11,7 +11,7 @@ const path = require('path');
 const os   = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION    = '7.2';
+const VERSION    = '7.3';
 const PORT       = 8000;
 const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');

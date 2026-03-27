@@ -114,8 +114,10 @@ public class EpsonESCPBuilder {
 
         Remote1Cmd("HD", new byte[] { 3, 4 });
         
-        // *** THE MAGIC BULLET: PP (Paper Path) = 3 (ROLL PAPER), 0 (Auto Source) ***
-        Remote1Cmd("PP", new byte[] { 3, 0 }); 
+        // *** THE MAGIC BULLET: PP (Paper Path) = 0 (ASF/Auto) 대신 3 (ROLL PAPER)를 사용하면 
+        // 롤 기능이 없는 데스크탑 EPSON (M105 등)은 에러를 내고 멈춥니다.
+        // 모든 범용 호환을 위해 0(Auto/ASF)으로 설정합니다.
+        Remote1Cmd("PP", new byte[] { 0, 0 }); 
         
         Send("\x1B\x00\x00\x00"); // Exit REMOTE1
 
