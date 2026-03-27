@@ -1300,7 +1300,6 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           alert("✅ 양쪽 연결 인쇄 완료!");
         } else {
           await sendJob(separateLeftRef, width, length, '경조사');
-          // 프린터가 첫 번째 작업을 처리할 시간 부여
           await new Promise(r => setTimeout(r, 2000));
           await sendJob(separateRightRef, width, length, '보내는이');
           alert("✅ 각각 인쇄 완료! (총 2건)");
