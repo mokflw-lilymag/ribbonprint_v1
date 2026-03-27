@@ -449,7 +449,7 @@ interface RibbonCanvasProps {
 
 const RibbonCanvas = ({ 
   text, fontConfig, ratioX, ratioY, width, lace, length, marginTop, marginBottom, 
-  rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false, marginOffset = 0,
+  rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false, marginOffset: _marginOffset = 0,
   shopLogo = null, printLogo = false
 }: RibbonCanvasProps) => {
   // Parse lines
