@@ -780,7 +780,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = "6.2";
+const REQUIRED_BRIDGE_VERSION = "6.2.1";
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -791,16 +791,75 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  // isRightPanelOpen removed to satisfy lint as requested
+
+  // ─── Bridge Connection Status (Live Polling) ───
+  const [bridgeConnected, setBridgeConnected] = useState(false);
+  const [bridgeVersion, setBridgeVersion] = useState('');
+  const bridgeCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const loadPrinters = () => {
+    fetch('http://127.0.0.1:8000/api/printers', { signal: AbortSignal.timeout(5000) })
+      .then(res => res.json())
+      .then(res => {
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          setPrinters(res.data);
+          setSelectedPrinter(prev => {
+            if (prev && res.data.find((p: any) => p.name === prev)) return prev;
+            return res.data.length > 0 ? res.data[0].name : '';
+          });
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    let wasConnected = false;
+    const checkBridge = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/', { signal: AbortSignal.timeout(2000) });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          setBridgeConnected(true);
+          setBridgeVersion(data.version || '');
+          // On first connect or reconnect, refresh printer list
+          if (!wasConnected) {
+            wasConnected = true;
+            loadPrinters();
+          }
+        } else {
+          setBridgeConnected(false);
+          wasConnected = false;
+        }
+      } catch {
+        setBridgeConnected(false);
+        wasConnected = false;
+      }
+    };
+    checkBridge();
+    bridgeCheckRef.current = setInterval(checkBridge, 5000);
+    return () => { if (bridgeCheckRef.current) clearInterval(bridgeCheckRef.current); };
+  }, []);
+
+  const isVersionOk = (v: string) => {
+    if (!v) return false;
+    const parse = (s: string) => s.split('.').map(Number);
+    const cur = parse(v);
+    const req = parse(REQUIRED_BRIDGE_VERSION);
+    for (let i = 0; i < Math.max(cur.length, req.length); i++) {
+      const c = cur[i] || 0;
+      const r = req[i] || 0;
+      if (c > r) return true;
+      if (c < r) return false;
+    }
+    return true; // equal
+  };
 
   const checkSubscriptionAction = async (action: () => void) => {
-    // 체험 계정 판별 및 마케팅 페이월 (Paywall)
     if (session?.user?.email === 'test@test.com') {
       alert("🚨 실제 인쇄 및 저장은 개인 계정 가입 후 무료로 이용 가능합니다.\n지금 1분 만에 가입하세요!");
       await supabase.auth.signOut();
       return;
     }
-
     if (isAdmin || subscription.isActive) {
       action();
     } else {
@@ -996,16 +1055,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
   useEffect(() => {
     loadFontSettings();
-    // Load Printers
-    fetch('http://127.0.0.1:8000/api/printers')
-      .then(res => res.json())
-      .then(res => {
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          setPrinters(res.data);
-          if (res.data.length > 0) setSelectedPrinter(res.data[0].name);
-        }
-      })
-      .catch(err => console.error("Failed to fetch printers", err));
+    // Printers are loaded automatically by bridge polling (on first connect)
 
     // Auto-Pair Cloud Print Agent with Local Bridge
     if (session?.user?.id) {
@@ -1017,9 +1067,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({ user_id: session.user.id })
-       }).catch(() => {
-         // Silently fail if local bridge is not running (e.g. on mobile remote usage)
-       });
+       }).catch(() => {});
     }
   }, [session?.user?.id]);
 
@@ -1071,7 +1119,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         return;
       }
       
-      if (bridgeVersion !== REQUIRED_BRIDGE_VERSION) {
+      if (!isVersionOk(bridgeVersion)) {
         setIsUpdateModalOpen(true);
         setIsPrinting(false);
         return;
@@ -1381,6 +1429,22 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           {session?.user?.email && (
             <p className="text-[10px] text-blue-400/80 mt-1 truncate" title={session.user.email}>👤 {session.user.email}</p>
           )}
+
+          {/* ─── Bridge Connection Status ─── */}
+          <div 
+            className={`mt-2 px-2 py-1.5 rounded-lg text-[10px] font-medium text-center border tracking-wide cursor-pointer transition-all ${
+              bridgeConnected
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                : 'bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25 animate-pulse'
+            }`}
+            onClick={() => { if (!bridgeConnected) setIsBridgeModalOpen(true); else loadPrinters(); }}
+            title={bridgeConnected ? `Bridge v${bridgeVersion} 연결됨 (클릭: 프린터 새로고침)` : '브릿지 미연결 (클릭: 설치 안내)'}
+          >
+            {bridgeConnected 
+              ? `🟢 인쇄 브릿지 연결됨 (v${bridgeVersion})` 
+              : '🔴 인쇄 브릿지 미연결 (클릭하여 설치)'}
+          </div>
+
           {/* Subscription Badge */}
           {!subLoading && (
             <div className={`mt-2 px-2 py-1.5 rounded-lg text-[10px] font-medium text-center border tracking-wide ${
@@ -2298,7 +2362,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
              } catch (e) {
                // still loading
              }
-             if (attempts > 20) {
+             if (attempts > 60) {
                 clearInterval(pollInterval);
                 setIsUpdating(false);
                 setIsUpdateModalOpen(false);

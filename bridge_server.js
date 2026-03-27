@@ -109,7 +109,7 @@ function getEngineStrategy(brand) {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
-    version: '6.2',
+    version: '6.2.1',
     message: 'RibbonBridge Universal Engine Active',
     engines: {
       epson_escp: HAS_EPSON,
@@ -463,18 +463,29 @@ echo ==============================================
 echo Please wait... Waiting for server to stop...
 timeout /t 2 /nobreak >nul
 taskkill /F /IM sys_service.exe >nul 2>&1
+taskkill /F /IM launch_service.exe >nul 2>&1
 
 echo Downloading latest version from cloud...
-powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip' -OutFile 'update.zip'"
+powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip' -OutFile 'update.zip' -TimeoutSec 30"
 
 echo Extracting update...
 powershell -Command "Expand-Archive -Path 'update.zip' -DestinationPath 'upd_tmp' -Force"
 
 echo Applying update...
-:: Copy files from the "system" folder inside the zip to the current installation folder
-xcopy /Y /E "upd_tmp\\system\\*" "." >nul
-rmdir /S /Q upd_tmp
-del update.zip
+:: Navigate the extracted folder structure to find the system files
+:: ZIP contains: RibbonBridge_Setup/system/* or just system/*
+if exist "upd_tmp\\system" (
+  xcopy /Y /E "upd_tmp\\system\\*" "." >nul
+) else (
+  :: Try nested folder structure
+  for /d %%D in (upd_tmp\\*) do (
+    if exist "%%D\\system" (
+      xcopy /Y /E "%%D\\system\\*" "." >nul
+    )
+  )
+)
+if exist upd_tmp rmdir /S /Q upd_tmp
+if exist update.zip del update.zip
 
 echo Starting new version...
 start "" "launch_service.exe"
@@ -497,7 +508,7 @@ start "" "launch_service.exe"
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
-    version: '6.2',
+    version: '6.2.1',
     uptime: Math.floor(process.uptime()),
     engines: {
       epson_escp: { available: HAS_EPSON, path: EPSON_AGENT },
