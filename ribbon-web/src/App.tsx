@@ -1294,16 +1294,31 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         await sendJob(separateRightRef, width, length, '보내는이');
         alert("✅ 보내는이 인쇄 완료!");
       } else {
-        // 양쪽 모두
-        if (printLayout === 'connected') {
-          await sendJob(connectedPrintRef, width, length * 2, '양쪽연결');
-          alert("✅ 양쪽 연결 인쇄 완료!");
-        } else {
-          await sendJob(separateLeftRef, width, length, '경조사');
-          await new Promise(r => setTimeout(r, 2000));
-          await sendJob(separateRightRef, width, length, '보내는이');
-          alert("✅ 각각 인쇄 완료! (총 2건)");
-        }
+        // [V11] 양쪽 모두: 리본 로딩 방지를 위해 하나의 작업(Array)으로 묶어서 전송
+        const leftImg = await captureAndRotate(separateLeftRef, '경조사');
+        const rightImg = await captureAndRotate(separateRightRef, '보내는이');
+        
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90000);
+        
+        const response = await fetch('http://127.0.0.1:8000/api/print_image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            printer_name: selectedPrinter,
+            image_base64: [leftImg, rightImg], // 배열로 전송!
+            width_mm: width,
+            length_mm: length + (mediaType === 'roll' ? cuttingMargin : 0),
+            media_type: mediaType,
+            cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
+            margin_offset_mm: marginOffset
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        
+        if (!response.ok) throw new Error("인쇄 서버 응답 실패");
+        alert("✅ 양쪽 연속 인쇄 완료! (리본 로딩 방지 적용)");
       }
 
     } catch (error: any) {

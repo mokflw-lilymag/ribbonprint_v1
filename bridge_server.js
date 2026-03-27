@@ -111,54 +111,42 @@ app.get('/api/printers', (_req, res) => {
 
 // ── /api/print_image: 핵심 프린트 엔진 ───────────────────────
 app.post('/api/print_image', async (req, res) => {
-  const { printer_name, image_base64, width_mm, length_mm, margin_offset_mm, print_quality } = req.body;
-  if (!printer_name || !image_base64) {
-    return res.status(400).json({ status: 'error', message: 'Missing printer_name or image_base64' });
-  }
-
-  const jobId  = `job_${Date.now()}`;
-  const tmpPng = path.join(TMP_DIR, `${jobId}.png`);
-
-  console.log(`\n[PRINT] ── Job ${jobId} ─────────────────────`);
-  console.log(`[PRINT]   Printer : ${printer_name}`);
-  console.log(`[PRINT]   Size    : ${width_mm}mm × ${length_mm}mm`);
+  const { printer_name, image_base64, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0 } = req.body;
+  const jobId = `job_${Date.now()}`;
+  const localPaths = [];
 
   try {
-    // 1. Base64 → PNG 파일 저장
-    const rawData = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
-    fs.writeFileSync(tmpPng, Buffer.from(rawData, 'base64'));
-    console.log(`[PRINT]   Saved   : ${tmpPng}`);
-
-    // 2. 프린터 브랜드 확인
-    const cached = cachedPrinterInfo[printer_name];
-    const brand  = cached?.brand || detectBrand(printer_name, '');
-    const isM105 = printer_name.toUpperCase().includes('M105');
-
-    // 3. ESC/P 에이전트 (M105 제외한 Epson)
-    if (brand === 'epson' && !isM105 && HAS_EPSON) {
-      const marginCenter = 34.5 + (parseFloat(margin_offset_mm) || 0) + (width_mm / 2.0);
-      const cmd = `"${EPSON_AGENT}" "${printer_name}" "${tmpPng}" ${width_mm} ${length_mm} ${marginCenter.toFixed(1)}`;
-      await new Promise((resolve, reject) => {
-        exec(cmd, { timeout: 30000 }, (err, stdout) => {
-          if (err || !stdout.includes('SUCCESS')) reject(new Error(stdout || err?.message));
-          else resolve();
-        });
-      });
-      console.log(`[PRINT] ✅ ESC/P Success`);
-      return res.json({ status: 'success', method: 'escp' });
+    // 이미지 리스트 처리
+    const images = Array.isArray(image_base64) ? image_base64 : [image_base64];
+    
+    for (let i = 0; i < images.length; i++) {
+        const pathStr = path.join(TMP_DIR, `${jobId}_${i}.png`);
+        const rawData = images[i].includes(',') ? images[i].split(',')[1] : images[i];
+        fs.writeFileSync(pathStr, Buffer.from(rawData, 'base64'));
+        localPaths.push(pathStr);
     }
 
-    // 4. GDI 엔진 (M105 포함 모든 기타 프린터)
+    console.log(`\n[PRINT] ── Multi-Job ${jobId} ─────────────────────`);
+    console.log(`[PRINT]   Printer : ${printer_name}`);
+    console.log(`[PRINT]   Pages   : ${localPaths.length}`);
+
+    // GDI 엔진 호출 (이미지 경로 배열 전달)
     const leftMarginMM = parseFloat(margin_offset_mm) || 0;
-    await printViaGDI(printer_name, tmpPng, parseFloat(width_mm), parseFloat(length_mm), leftMarginMM);
-    console.log(`[PRINT] ✅ GDI Success`);
-    return res.json({ status: 'success', method: 'gdi' });
+    const cuttingMarginMM = parseFloat(cutting_margin_mm) || 0;
+    
+    await printViaGDI(printer_name, localPaths, parseFloat(width_mm), parseFloat(length_mm), leftMarginMM, cuttingMarginMM);
+    
+    console.log(`[PRINT] ✅ Success`);
+    return res.json({ status: 'success' });
 
   } catch (err) {
     console.error(`[PRINT] ❌ ${err.message}`);
     return res.json({ status: 'error', message: err.message });
   } finally {
-    try { if (fs.existsSync(tmpPng)) fs.unlinkSync(tmpPng); } catch {}
+    // 모든 임시파일 삭제
+    localPaths.forEach(p => {
+        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+    });
   }
 });
 
@@ -169,23 +157,21 @@ app.post('/api/print_image', async (req, res) => {
 //  · DrawImage rect는 픽셀 단위가 아니라 1/100인치 단위 (GDI 기본)
 //  · M105는 세로 방향(landscape=false), 상단부터 급지
 //  · 이미지는 이미 App.tsx에서 180도 회전되어 있음
-function printViaGDI(printerName, imagePath, widthMM, lengthMM, leftMarginMM) {
+// ─── GDI Engine: Epson M105 배너 최적화 ───────────────────────
+function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0) {
   return new Promise((resolve, reject) => {
+    // images가 단일 경로면 배열로 변환
+    const imageList = Array.isArray(images) ? images : [images];
     const safePrinter = printerName.replace(/'/g, "''");
-    const safeImage   = imagePath.replace(/\\/g, '\\\\').replace(/'/g, "''");
-
-    // mm → 1/100 inch 변환 (PrintDocument 단위)
-    // 25.4mm = 1 inch = 100 units
+    
+    // mm → 1/100 inch 변환
     const widthUnits  = Math.round(widthMM  / 25.4 * 100);
     const lengthUnits = Math.round(lengthMM / 25.4 * 100);
-    
-    // [V10] M105 같은 A4 프린터에서 배율이 뻥튀기되는 현상을 막기 위해
-    // 페이지 폭을 A4(210mm = 827 unit)로 "고정"합니다.
-    const canvasWidthUnits = 827; 
-
-    console.log(`[GDI V10] Center=${leftMarginMM}mm, Width=${widthMM}mm → StartX=${leftMarginMM - widthMM/2}mm`);
-
+    const canvasWidthUnits = 827; // A4 Fixed
+    const imageHeightMM = lengthMM - cuttingMarginMM;
     const finalX = leftMarginMM - (widthMM / 2);
+
+    console.log(`[GDI V11] Combined Job: ${imageList.length} pages, Center=${leftMarginMM}mm, Paper=${lengthMM}mm`);
 
     const psScript = `
 Add-Type -AssemblyName System.Drawing
@@ -194,41 +180,54 @@ $pd = New-Object System.Drawing.Printing.PrintDocument
 $pd.PrinterSettings.PrinterName = '${safePrinter}'
 $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 
-# [V10] 용지 폭을 A4(210mm)로 고정하여 드라이버의 자동 배율 조정을 원천 봉쇄
-$paperSize = New-Object System.Drawing.Printing.PaperSize("A4-Fixed", ${canvasWidthUnits}, ${lengthUnits})
+# 용지 폭 고정 및 여백 0 설정 (불필요한 급지 방지)
+$paperSize = New-Object System.Drawing.Printing.PaperSize("Ribbon-Roll", ${canvasWidthUnits}, ${lengthUnits})
 $pd.DefaultPageSettings.PaperSize = $paperSize
-$pd.DefaultPageSettings.Margins   = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+$pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
 $pd.OriginAtMargins = $false
 
-$img = [System.Drawing.Image]::FromFile('${safeImage}')
+$global:pageIdx = 0
+$global:images = @()
+${imageList.map(img => `$global:images += '${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join('\n')}
 
 $pd.Add_PrintPage({
   param($sender, $e)
   
-  # 단위를 밀리미터(mm)로 고정하여 윈도우 배율 영향 차단
+  $currentImgPath = $global:images[$global:pageIdx]
+  $img = [System.Drawing.Image]::FromFile($currentImgPath)
+  
   $e.Graphics.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
   
-  # 프린터 하드웨어 여백(HardMargin) 보정
+  # 하드웨어 오차 제거 (0점 정렬)
   $offX = $e.PageSettings.HardMarginX / 100 * 25.4
   $offY = $e.PageSettings.HardMarginY / 100 * 25.4
   $e.Graphics.TranslateTransform(-$offX, -$offY)
 
-  # X = 중심점(Center) - 리본폭/2 = 이미지 시작점
-  # 예: 38mm리본, 중심점53 → X = 53-19 = 34mm 에서 시작하면 중간이 53에 놓임
-  $destRect = New-Object System.Drawing.RectangleF(${finalX}, 0, ${widthMM}, ${lengthMM})
+  $destRect = New-Object System.Drawing.RectangleF(${finalX}, 0, ${widthMM}, ${imageHeightMM})
   
-  # 정밀 품질 렌더링
+  # 품질 설정
   $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
   $e.Graphics.PixelOffsetMode   = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
   
+  # 이미지 그리기
   $e.Graphics.DrawImage($img, $destRect)
-  $e.HasMorePages = $false
+  $img.Dispose()
+
+  $global:pageIdx++
+  if ($global:pageIdx -lt $global:images.Count) {
+    $e.HasMorePages = $true
+  } else {
+    $e.HasMorePages = $false
+  }
 })
 
-$pd.Print()
-$img.Dispose()
-$pd.Dispose()
-Write-Output "GDI_SUCCESS"
+try {
+  $pd.Print()
+  $pd.Dispose()
+  Write-Output "GDI_SUCCESS"
+} catch {
+  Write-Error $_.Exception.Message
+}
 `;
 
     const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript]);
@@ -239,14 +238,12 @@ Write-Output "GDI_SUCCESS"
     ps.stderr.on('data', d => { stderr += d.toString(); });
 
     ps.on('close', code => {
-      console.log(`[GDI] Exit=${code}, stdout="${stdout.trim()}", stderr="${stderr.trim().slice(0,200)}"`);
       if (code === 0 && stdout.includes('GDI_SUCCESS')) {
         resolve();
       } else {
         reject(new Error(stderr.trim() || stdout.trim() || `GDI exit code ${code}`));
       }
     });
-
     ps.on('error', err => reject(new Error(`spawn error: ${err.message}`)));
   });
 }
