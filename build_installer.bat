@@ -28,6 +28,14 @@ mkdir RibbonBridge_Setup
 
 copy RibbonBridge_Core.exe RibbonBridge_Setup\
 copy ribbon_printer.exe RibbonBridge_Setup\
+copy ribbon_printer_hp.exe RibbonBridge_Setup\ >nul 2>&1
+
+echo Set WshShell = CreateObject("WScript.Shell") > RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
+echo On Error Resume Next >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
+echo WshShell.Run "taskkill /F /IM RibbonBridge_Core.exe", 0, True >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
+echo WScript.Sleep 500 >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
+echo WshShell.Run chr(34) ^& "RibbonBridge_Core.exe" ^& Chr(34), 0 >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
+echo Set WshShell = Nothing >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
 
 echo ==============================================
 echo BUILD COMPLETE!

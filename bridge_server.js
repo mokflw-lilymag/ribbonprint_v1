@@ -18,7 +18,7 @@ const HAS_EPSON   = fs.existsSync(EPSON_AGENT);
 const HAS_HP      = fs.existsSync(HP_AGENT);
 
 console.log('╔══════════════════════════════════════════════════╗');
-console.log('║   RibbonBridge v6.0 - Universal Print Engine    ║');
+console.log('║   RibbonBridge v6.1 - Universal Print Engine    ║');
 console.log('║   Epson ESC/P + HP PCL5 + GDI Fallback          ║');
 console.log('╚══════════════════════════════════════════════════╝');
 console.log(`> Platform: ${os.platform()} ${os.release()}`);
@@ -109,7 +109,7 @@ function getEngineStrategy(brand) {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
-    version: '6.0',
+    version: '6.1',
     message: 'RibbonBridge Universal Engine Active',
     engines: {
       epson_escp: HAS_EPSON,
@@ -424,11 +424,46 @@ function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId) {
   });
 }
 
+// ─── Auto Updater ──────────────────────────────────────────
+app.post('/api/update', (req, res) => {
+  res.json({ status: 'ok', message: 'Update initiated' });
+  console.log(`\n> 📥 UPDATE INITIATED: Downloading new version from GitHub...`);
+  
+  const batPath = path.join(process.cwd(), 'updater.bat');
+  const batLogic = `@echo off
+echo ==============================================
+echo RibbonBridge Auto Updater
+echo ==============================================
+echo Please wait... Waiting for server to stop...
+timeout /t 2 /nobreak >nul
+taskkill /F /IM RibbonBridge_Core.exe >nul 2>&1
+echo Downloading latest version from cloud...
+powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip' -OutFile 'update.zip'"
+echo Extracting update...
+powershell -Command "Expand-Archive -Path 'update.zip' -DestinationPath '.' -Force"
+del update.zip
+echo Starting new version...
+start "" "인쇄서버_시작하기(클릭).vbs"
+(goto) 2>nul & del "%~f0"`;
+
+  fs.writeFileSync(batPath, batLogic);
+  
+  setTimeout(() => {
+    const childProcess = spawn('cmd.exe', ['/c', batPath], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: process.cwd()
+    });
+    childProcess.unref();
+    process.exit(0);
+  }, 1000);
+});
+
 // ─── Status / Diagnostics ──────────────────────────────────
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
-    version: '6.0',
+    version: '6.1',
     uptime: Math.floor(process.uptime()),
     engines: {
       epson_escp: { available: HAS_EPSON, path: EPSON_AGENT },
@@ -448,7 +483,7 @@ app.get('/api/status', (req, res) => {
 
 // ─── Start Server ──────────────────────────────────────────
 app.listen(port, '127.0.0.1', () => {
-  console.log(`\n> 🚀 RibbonBridge v6.0 listening on http://localhost:${port}`);
+  console.log(`\n> 🚀 RibbonBridge v6.1 listening on http://localhost:${port}`);
   console.log(`>`);
   console.log(`> Print Strategy:`);
   console.log(`>   Epson → ESC/P RAW (roll mode, unlimited length)`);

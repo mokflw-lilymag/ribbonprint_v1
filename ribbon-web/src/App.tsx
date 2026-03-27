@@ -780,6 +780,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
+const REQUIRED_BRIDGE_VERSION = "6.1";
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -788,6 +789,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const { subscription, loading: subLoading } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   // isRightPanelOpen removed to satisfy lint as requested
 
   const checkSubscriptionAction = async (action: () => void) => {
@@ -875,6 +878,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
+  const [isBridgeModalOpen, setIsBridgeModalOpen] = useState(false);
   const [phraseCategories, setPhraseCategories] = useState(DEFAULT_PHRASE_CATEGORIES);
 
   // Shop Logo State
@@ -993,7 +997,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   useEffect(() => {
     loadFontSettings();
     // Load Printers
-    fetch('http://localhost:8000/api/printers')
+    fetch('http://127.0.0.1:8000/api/printers')
       .then(res => res.json())
       .then(res => {
         if (res.status === 'success' && Array.isArray(res.data)) {
@@ -1048,15 +1052,29 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       
       // 1. Bridge 연결 상태 사전 확인
       let bridgeOnline = false;
+      let bridgeVersion = "";
       try {
-        const healthCheck = await fetch('http://localhost:8000/', { 
+        const healthCheck = await fetch('http://127.0.0.1:8000/', { 
           signal: AbortSignal.timeout(3000) 
         });
         const health = await healthCheck.json();
         bridgeOnline = health.status === 'ok';
-        console.log(`[Print] Bridge status: ${health.status}, version: ${health.version || 'unknown'}`);
+        bridgeVersion = health.version || 'unknown';
+        console.log(`[Print] Bridge status: ${health.status}, version: ${bridgeVersion}`);
       } catch {
-        console.log('[Print] Local bridge not available - will use cloud relay');
+        console.log('[Print] Local bridge not available');
+      }
+
+      if (!bridgeOnline) {
+        setIsBridgeModalOpen(true);
+        setIsPrinting(false);
+        return;
+      }
+      
+      if (bridgeVersion !== REQUIRED_BRIDGE_VERSION) {
+        setIsUpdateModalOpen(true);
+        setIsPrinting(false);
+        return;
       }
       
       const sendJob = async (ref: React.RefObject<HTMLDivElement | null>, w: number, h: number, label: string) => {
@@ -1070,7 +1088,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         const dataUrl = await toPng(ref.current, {
           pixelRatio: 4,
           backgroundColor: '#ffffff',
-          cacheBust: true,
+          cacheBust: false,
           skipAutoScale: true,
           style: {
             transform: 'none', // 캡처 시 CSS transform 제거하여 올바른 방향 보장
@@ -1081,68 +1099,47 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         console.log(`[Print] Image captured: ~${imageSize}KB`);
 
         // 로컬 브릿지 인쇄 시도
-        if (bridgeOnline) {
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
-            
-            const response = await fetch('http://localhost:8000/api/print_image', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                printer_name: selectedPrinter,
-                image_base64: dataUrl,
-                width_mm: w,
-                length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
-                media_type: mediaType,
-                cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
-                print_quality: printQuality,
-                margin_offset_mm: marginOffset
-              }),
-              signal: controller.signal
-            });
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+          
+          const response = await fetch('http://127.0.0.1:8000/api/print_image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              printer_name: selectedPrinter,
+              image_base64: dataUrl,
+              width_mm: w,
+              length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
+              media_type: mediaType,
+              cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
+              print_quality: printQuality,
+              margin_offset_mm: marginOffset
+            }),
+            signal: controller.signal
+          });
 
-            clearTimeout(timeout);
+          clearTimeout(timeout);
 
-            if (response.ok) {
-              const result = await response.json();
-              if (result.status === 'success') {
-                console.log(`[Print] ✅ Local print success (${result.method || 'native'})`);
-                return; // 성공!
-              }
-              // 로컬 실패 시 에러 메시지 표시하고 클라우드로 폴백하지 않음
-              throw new Error(result.message || '인쇄 실패');
-            } else {
-              throw new Error(`Bridge HTTP ${response.status}`);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.status === 'success') {
+              console.log(`[Print] ✅ Local print success (${result.method || 'native'})`);
+              return; // 성공!
             }
-          } catch (err: any) {
-            if (err.name === 'AbortError') {
-              throw new Error('인쇄 시간이 초과되었습니다 (60초). 프린터 연결을 확인해주세요.');
-            }
-            // 진짜 에러 (브릿지는 연결되었는데 인쇄 실패)
-            console.error(`[Print] Local bridge error: ${err.message}`);
-            throw err;
+            // 로컬 실패 시 에러 메시지 표시
+            throw new Error(result.message || '인쇄 실패');
+          } else {
+            throw new Error(`Bridge HTTP ${response.status}`);
           }
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            throw new Error('인쇄 시간이 초과되었습니다 (60초). 프린터 연결을 확인해주세요.');
+          }
+          // 진짜 에러 (브릿지는 연결되었는데 인쇄 실패)
+          console.error(`[Print] Local bridge error: ${err.message}`);
+          throw err;
         }
-
-        // 클라우드 릴레이 폴백 (로컬 브릿지 없을 때만)
-        if (!session?.user?.id) throw new Error("인쇄를 위해 로그인이 필요합니다.");
-
-        console.log('[Print] Using Cloud Relay...');
-        const { error: cloudError } = await supabase.from('print_jobs').insert({
-          user_id: session.user.id,
-          printer_name: selectedPrinter,
-          image_base64: dataUrl,
-           width_mm: w,
-           length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
-           status: 'pending'
-         });
-
-        if (cloudError) {
-          throw new Error(`클라우드 출력 전송 실패: ${cloudError.message}`);
-        }
-        
-        console.log('[Print] ☁️ Cloud print job queued');
       };
 
       if (printTarget === 'left') {
@@ -1501,7 +1498,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </select>
               <button 
                 onClick={() => {
-                  fetch('http://localhost:8000/api/printers')
+                  fetch('http://127.0.0.1:8000/api/printers')
                     .then(res => res.json())
                     .then(res => res.status === 'success' && setPrinters(res.data));
                 }}
@@ -2232,6 +2229,123 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         onLoad={onLoadConfig}
         userId={session?.user.id}
       />
+
+      {/* Bridge Download Modal */}
+      {isBridgeModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center relative overflow-hidden">
+            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 to-emerald-400"></div>
+            <div className="text-6xl mb-4">🖨️</div>
+            <h2 className="text-2xl font-semibold text-white mb-2">프린트 브릿지 설치 필요</h2>
+            <p className="text-slate-400 mb-6 text-sm">
+              클라우드 브라우저에서 로컬 프린터로 인쇄하려면<br/>
+              <b>최초 1회 브릿지 프로그램(PC용)</b> 설치가 필요합니다.<br/>
+              설치 후 한 번만 실행해두면 다음부터는 자동으로 연결됩니다!
+            </p>
+            <div className="bg-blue-900/30 border border-blue-500/30 rounded p-3 mb-6 text-left">
+              <p className="text-blue-300 text-xs font-semibold mb-1">💡 "Windows의 PC 보호" 창이 나타날 시</p>
+              <p className="text-slate-300 text-[11px] leading-relaxed">
+                다운로드 후 첫 실행 시 파란색 창이 뜰 수 있습니다. 당황하지 마시고, 왼쪽 글씨 중 <span className="text-white font-bold underline">추가 정보</span> 버튼을 누르신 후, 우측 하단에 생기는 <span className="text-white font-bold">실행 버튼</span>을 눌러주시면 정상적으로 작동합니다.
+              </p>
+            </div>
+            <div className="flex gap-3 justify-center">
+              <button 
+                onClick={() => setIsBridgeModalOpen(false)}
+                className="px-6 py-3 rounded-lg font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+              >
+                닫기
+              </button>
+              <button 
+                onClick={() => {
+                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip');
+                  setIsBridgeModalOpen(false);
+                }}
+                className="flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40"
+              >
+                다운로드 및 작동
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <UpdateBridgeModal 
+        isOpen={isUpdateModalOpen}
+        isUpdating={isUpdating}
+        onClose={() => setIsUpdateModalOpen(false)}
+        onUpdate={async () => {
+          setIsUpdating(true);
+          try {
+             fetch('http://127.0.0.1:8000/api/update', { method: 'POST' });
+          } catch {
+            // Error intentionally ignored
+          }
+          
+          let attempts = 0;
+          const pollInterval = window.setInterval(async () => {
+             attempts++;
+             try {
+               const check = await fetch('http://127.0.0.1:8000/', { signal: AbortSignal.timeout(1500) });
+               const res = await check.json();
+               if (res.version === REQUIRED_BRIDGE_VERSION) {
+                  clearInterval(pollInterval);
+                  setIsUpdating(false);
+                  setIsUpdateModalOpen(false);
+                  alert("🌟 브릿지 업데이트가 성공적으로 완료되었습니다!");
+               }
+             } catch (e) {
+               // still loading
+             }
+             if (attempts > 20) {
+                clearInterval(pollInterval);
+                setIsUpdating(false);
+                setIsUpdateModalOpen(false);
+                alert("업데이트 시간이 초과되었습니다. 방화벽 문제일 수 있으니 수동 설치를 권장합니다.");
+             }
+          }, 2000);
+        }}
+      />
+    </div>
+  );
+}
+
+// Update Bridge Handler Component (inside App, or simple helper)
+function UpdateBridgeModal({ isOpen, isUpdating, onClose, onUpdate }: { isOpen: boolean, isUpdating: boolean, onClose: () => void, onUpdate: () => void }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
+      <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center relative overflow-hidden">
+        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-yellow-500 to-orange-400"></div>
+        <div className="text-6xl mb-4">🚀</div>
+        <h2 className="text-2xl font-semibold text-white mb-2">
+          {isUpdating ? "업데이트 설치 중..." : "새로운 브릿지 업데이트 발견"}
+        </h2>
+        <p className="text-slate-400 mb-6 text-sm">
+          {isUpdating 
+            ? "새로운 버전을 다운로드하고 백그라운드에서 재시작 중입니다.\n이 창을 닫지 말고 잠시만 기다려주세요 (최대 30초 소요)."
+            : "안정적인 인쇄를 지원하기 위해\n최신 버전의 필수 패치가 필요합니다.\n\n지금 자동으로 업데이트 하시겠습니까?"}
+        </p>
+        <div className="flex gap-3 justify-center">
+          {!isUpdating && (
+            <button 
+              onClick={onClose}
+              className="px-6 py-3 rounded-lg font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            >
+              다음에 하기
+            </button>
+          )}
+          <button 
+            onClick={onUpdate}
+            disabled={isUpdating}
+            className={cn(
+              "flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold text-white transition-colors shadow-lg",
+              isUpdating ? "bg-slate-600 cursor-not-allowed" : "bg-orange-600 hover:bg-orange-500 shadow-orange-900/40"
+            )}
+          >
+            {isUpdating ? "기다려주세요..." : "예 (업데이트 시작)"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
