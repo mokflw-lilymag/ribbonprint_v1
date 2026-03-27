@@ -28,7 +28,12 @@ const UPDATE_URL  = 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/R
 // ─── App Setup ─────────────────────────────────────────────────
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '200mb' }));
+app.use(express.json({ limit: '50mb' }));
+
+// ── 버전 체크 API (자동 업데이트 유도용) ───────────────────────
+app.get('/api/version', (req, res) => {
+  res.json({ status: 'success', version: VERSION });
+});
 
 if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
 

@@ -1385,29 +1385,33 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     }
   }, [isSidebarOpen]); // Re-fit when side panel toggles
 
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const CURRENT_TARGET_VERSION = "11.0";
+
   useEffect(() => {
-    const defaultSpecs = RIBBON_TYPES.find(t => t.id === ribbonType);
-    if (defaultSpecs) {
-      setWidth(defaultSpecs.width);
-      setLace(defaultSpecs.lace);
-      setLength(defaultSpecs.length);
-      setMarginTop(defaultSpecs.marginTop); 
-      setMarginBottom(defaultSpecs.marginBottom);
-      
-      // Auto-fit on type change
-      if (mainRef.current) {
-        const padX = 20;
-        const padY = 40;
-        const availableH = mainRef.current.clientHeight - padY * 2;
-        const availableW = mainRef.current.clientWidth - padX * 2;
-        const targetH = defaultSpecs.length * 2;
-        const targetW = defaultSpecs.width * 2;
-        if (targetH > 0 && targetW > 0 && availableH > 0 && availableW > 0) {
-           setZoom(Math.min(1.5, availableH / targetH, availableW / targetW));
+    const checkBridge = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/version', { mode: 'cors' });
+        if (res.ok) {
+           const data = await res.json();
+           if (data.version !== CURRENT_TARGET_VERSION) {
+              console.log("[Bridge] Version mismatch:", data.version, "!==", CURRENT_TARGET_VERSION);
+              setShowUpdateModal(true);
+           }
+        } else {
+           // Not OK but reachable - might be very old version
+           setShowUpdateModal(true);
         }
+      } catch (e) {
+        // Can't connect - either not running or very old bridge
+        // We'll only show if they try to print or after a delay?
+        console.log("[Bridge] Could not check version. Might be offline or very old.");
       }
-    }
-  }, [ribbonType]);
+    };
+    
+    const timer = setTimeout(checkBridge, 2000); // 2초 후 체크
+    return () => clearTimeout(timer);
+  }, []);
 
   const insertSymbol = (sym: string) => {
     if (activeSide === 'left') setLeftText(prev => prev + sym);
@@ -2356,7 +2360,44 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
       </div>
 
-      {/* Paywall Modal */}
+      {/* Update Notification Modal */}
+      {showUpdateModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[300] animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-8 max-w-lg w-full mx-4 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"></div>
+            
+            <div className="text-5xl mb-6">🚀</div>
+            <h2 className="text-2xl font-bold text-white mb-2">최신 인쇄 브릿지 설치 권장 [v11.0]</h2>
+            <p className="text-amber-400 font-medium mb-4">새로운 연속 인쇄(리본 로딩 방지) 기능이 출시되었습니다!</p>
+            
+            <div className="bg-slate-800/50 rounded-2xl p-4 text-left mb-6 border border-slate-700">
+              <ul className="text-sm text-slate-300 space-y-2">
+                <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">리본 로딩 방지:</span> 양쪽 인쇄 시 버벅임 없이 즉시 연속 인쇄</li>
+                <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">정밀 멈춤 제어:</span> 여분 출력 후 리본이 즉시 전원 OFF 상태처럼 대기</li>
+                <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">안정성 향상:</span> 구버전에서 발생하던 통신 오류를 완벽히 해결</li>
+              </ul>
+            </div>
+
+            <p className="text-slate-400 text-xs mb-8">기존 브릿지를 사용 중이라면, 아래 버튼을 눌러 새 버전을 받아주세요.<br/>(압축을 푼 뒤 v11 설치 파일을 실행하면 즉시 교체됩니다.)</p>
+
+            <div className="flex flex-col gap-3">
+              <a 
+                href="/RibbonBridge_Setup_v11.zip" 
+                download
+                className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+              >
+                📥 v11.0 최신 브릿지 다운로드 (권장)
+              </a>
+              <button 
+                onClick={() => setShowUpdateModal(false)}
+                className="text-slate-500 hover:text-slate-300 text-sm py-2"
+              >
+                다음에 할게요 (기능이 제한될 수 있습니다)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showPaywall && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
           <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center">
