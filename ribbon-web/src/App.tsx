@@ -1085,13 +1085,15 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         console.log(`[Print] Capturing ${label}... (${w}x${h}mm)`);
         
         // 고품질 이미지 캡처 (pixelRatio 4 = 고해상도)
+        // 고품질 이미지 캡처 (pixelRatio 3 = 성능/품질 타협점)
+        // [Optimized] 폰트 대량 로딩 시 발생하는 net::ERR_INSUFFICIENT_RESOURCES 방지
         const dataUrl = await toPng(ref.current, {
-          pixelRatio: 4,
+          pixelRatio: 3, 
           backgroundColor: '#ffffff',
           cacheBust: false,
           skipAutoScale: true,
           style: {
-            transform: 'none', // 캡처 시 CSS transform 제거하여 올바른 방향 보장
+            transform: 'none', // 캡처 시 CSS transform 제거
           }
         });
 
@@ -1480,7 +1482,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <label className="text-xs text-slate-400">출력 프린터</label>
               <div className="flex items-center gap-1.5">
                 <div className={cn("w-2 h-2 rounded-full animate-pulse", printers.length > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500")} />
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tighter">Bridge v6.0</span>
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tighter">Bridge v6.1</span>
               </div>
             </div>
             <div className="flex gap-2">
