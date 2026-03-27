@@ -183,7 +183,7 @@ function printViaGDI(printerName, imagePath, widthMM, lengthMM, leftMarginMM) {
     // 페이지 폭을 A4(210mm = 827 unit)로 "고정"합니다.
     const canvasWidthUnits = 827; 
 
-    console.log(`[GDI V10] Target Center: ${leftMarginMM}mm, Ribbon Width: ${widthMM}mm`);
+    console.log(`[GDI V10] Center=${leftMarginMM}mm, Width=${widthMM}mm → StartX=${leftMarginMM - widthMM/2}mm`);
 
     const finalX = leftMarginMM - (widthMM / 2);
 
@@ -213,31 +213,10 @@ $pd.Add_PrintPage({
   $offY = $e.PageSettings.HardMarginY / 100 * 25.4
   $e.Graphics.TranslateTransform(-$offX, -$offY)
 
-  # X = 설정표의 수치 그대로 사용 (보충 보정 없이 직접 대입)
-  $destRect = New-Object System.Drawing.RectangleF(${leftMarginMM}, 0, ${widthMM}, ${lengthMM})
+  # X = 중심점(Center) - 리본폭/2 = 이미지 시작점
+  # 예: 38mm리본, 중심점53 → X = 53-19 = 34mm 에서 시작하면 중간이 53에 놓임
+  $destRect = New-Object System.Drawing.RectangleF(${finalX}, 0, ${widthMM}, ${lengthMM})
   
-  # [V10.7] 정밀 가로 눈침 (Ruler) - 인쇄 상단에 1mm 단위로 표기
-  $rulerFont = New-Object System.Drawing.Font("Arial", 2)
-  $rulerBrush = [System.Drawing.Brushes]::Red
-  $rulerPenThin = New-Object System.Drawing.Pen([System.Drawing.Color]::Red, 0.1)
-  $rulerPenBold = New-Object System.Drawing.Pen([System.Drawing.Color]::Red, 0.3)
-
-  for ($m = 0; $m -le 210; $m++) {
-    if ($m % 10 -eq 0) {
-      # 10mm 마다 긴 선 + 숫자
-      $e.Graphics.DrawLine($rulerPenBold, $m, 0, $m, 5)
-      $e.Graphics.DrawString($m.ToString(), $rulerFont, $rulerBrush, $m, 5)
-    } elseif ($m % 5 -eq 0) {
-      $e.Graphics.DrawLine($rulerPenThin, $m, 0, $m, 3)
-    } else {
-      $e.Graphics.DrawLine($rulerPenThin, $m, 0, $m, 1.5)
-    }
-  }
-
-  # 현재 설정된 중심점(Center)에 파란색 긴 화살표 표시
-  $centerPen = New-Object System.Drawing.Pen([System.Drawing.Color]::Blue, 0.5)
-  $e.Graphics.DrawLine($centerPen, ${leftMarginMM}, 0, ${leftMarginMM}, 15)
-
   # 정밀 품질 렌더링
   $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
   $e.Graphics.PixelOffsetMode   = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
