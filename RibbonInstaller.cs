@@ -3,10 +3,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Net;
+using System.Reflection;
 using System.Windows.Forms;
 using Microsoft.Win32;
-using System.Runtime.InteropServices;
 
 namespace RibbonBridgeInstaller
 {
@@ -28,7 +27,7 @@ namespace RibbonBridgeInstaller
 
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string installDir = Path.Combine(localAppData, "RibbonBridge");
-            string zipPath = Path.Combine(localAppData, "RibbonBridgeUpdates.zip");
+            string zipPath = Path.Combine(localAppData, "RibbonBridge_Embedded.zip");
 
             try
             {
@@ -43,47 +42,44 @@ namespace RibbonBridgeInstaller
                     Directory.CreateDirectory(installDir);
                 }
 
-                // 2. 최신 버전 다운로드 (웹 인스톨러 방식)
-                Form downForm = new Form();
-                downForm.Text = "다운로드 중...";
-                downForm.Size = new System.Drawing.Size(400, 100);
-                downForm.StartPosition = FormStartPosition.CenterScreen;
-                downForm.ControlBox = false;
-                
+                Form form = new Form();
+                form.Text = "설치 중...";
+                form.Size = new System.Drawing.Size(400, 100);
+                form.StartPosition = FormStartPosition.CenterScreen;
+                form.ControlBox = false;
                 Label lbl = new Label();
-                lbl.Text = "최신 브릿지 엔진을 클라우드에서 다운로드하고 있습니다...\n(잠시만 기다려주세요)";
+                lbl.Text = "프로그램을 설치하는 중입니다...\n(잠시만 기다려주세요)";
                 lbl.AutoSize = true;
                 lbl.Location = new System.Drawing.Point(20, 20);
-                downForm.Controls.Add(lbl);
-                
-                downForm.Show();
+                form.Controls.Add(lbl);
+                form.Show();
                 Application.DoEvents();
 
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                using (WebClient client = new WebClient())
+                // 2. 내부 리소스에서 ZIP 파일 추출 (인터넷 다운로드 제거 -> 바이러스 오탐지 방지)
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("RibbonBridge_Setup.zip"))
                 {
-                    string url = "https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip";
-                    client.DownloadFile(url, zipPath);
+                    if (stream == null) throw new Exception("설치 프로그램 내부에 필요한 패키지가 없습니다.");
+                    using (FileStream fileStream = new FileStream(zipPath, FileMode.Create))
+                    {
+                        byte[] buffer = new byte[8192];
+                        int bytesRead;
+                        while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            fileStream.Write(buffer, 0, bytesRead);
+                        }
+                    }
                 }
-
-                downForm.Close();
 
                 // 3. 압축 풀기 및 설치
                 if (File.Exists(zipPath))
                 {
                     // 기존 파일들 삭제
                     DirectoryInfo di = new DirectoryInfo(installDir);
-                    foreach (FileInfo file in di.GetFiles())
-                    {
+                    foreach (FileInfo file in di.GetFiles()) {
                         try { file.Delete(); } catch { }
                     }
-
                     ZipFile.ExtractToDirectory(zipPath, installDir);
                     File.Delete(zipPath); // Cleanup
-                }
-                else
-                {
-                    throw new Exception("다운로드된 파일을 찾을 수 없습니다.");
                 }
 
                 // 4. 레지스트리에 윈도우 시작 시 자동 실행 등록
@@ -106,11 +102,12 @@ namespace RibbonBridgeInstaller
                     Process.Start(startInfo);
                 }
 
-                MessageBox.Show("설치가 성공적으로 완료되었습니다!\n이제 리본 인쇄 버튼을 누르시면 곧바로 인쇄가 시작됩니다.\n\n(컴퓨터가 켜질 때마다 브릿지가 자동으로 백그라운드에서 조용히 실행됩니다.)", "설치 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                form.Close();
+                MessageBox.Show("설치가 성공적으로 완료되었습니다!\n이제 리본 인쇄 버튼을 누르시면 곧바로 인쇄가 시작됩니다.\n\n(컴퓨터가 켜질 때마다 브릿지가 자동으로 백그라운드에서 실행됩니다.)", "설치 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("설치 중 오류가 발생했습니다.\n" + ex.Message + "\n\n인터넷 연결을 확인하시거나 백신 프로그램의 차단 여부를 확인해 주십시오.", "설치 오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("설치 중 오류가 발생했습니다.\n" + ex.Message, "설치 오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
