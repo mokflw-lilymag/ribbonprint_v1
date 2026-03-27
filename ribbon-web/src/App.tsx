@@ -2238,14 +2238,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             <div className="text-6xl mb-4">🖨️</div>
             <h2 className="text-2xl font-semibold text-white mb-2">프린트 브릿지 설치 필요</h2>
             <p className="text-slate-400 mb-6 text-sm">
-              클라우드 브라우저에서 로컬 프린터로 인쇄하려면<br/>
-              <b>최초 1회 브릿지 프로그램(PC용)</b> 설치가 필요합니다.<br/>
-              설치 후 한 번만 실행해두면 다음부터는 자동으로 연결됩니다!
+              인쇄를 시작하려면 <b>최초 1회 브릿지 마법사</b> 설치가 필요합니다.<br/>
+              다운로드 후 [설치 마법사]를 열고 딱 1번만 실행하시면<br/>
+              앞으로 <b>자동으로 컴퓨터가 켜질 때마다 영구적으로 연결</b>됩니다!
             </p>
             <div className="bg-blue-900/30 border border-blue-500/30 rounded p-3 mb-6 text-left">
               <p className="text-blue-300 text-xs font-semibold mb-1">💡 "Windows의 PC 보호" 창이 나타날 시</p>
               <p className="text-slate-300 text-[11px] leading-relaxed">
-                다운로드 후 첫 실행 시 파란색 창이 뜰 수 있습니다. 당황하지 마시고, 왼쪽 글씨 중 <span className="text-white font-bold underline">추가 정보</span> 버튼을 누르신 후, 우측 하단에 생기는 <span className="text-white font-bold">실행 버튼</span>을 눌러주시면 정상적으로 작동합니다.
+                <span className="text-white font-bold underline">추가 정보</span> 버튼을 누르신 후, 우측 하단에 생기는 <span className="text-white font-bold">실행 버튼</span>을 눌러주시면 깔끔하게 1초만에 자동 설치됩니다.
               </p>
             </div>
             <div className="flex gap-3 justify-center">
@@ -2257,12 +2257,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
               <button 
                 onClick={() => {
-                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip');
+                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Installer.exe');
                   setIsBridgeModalOpen(false);
                 }}
                 className="flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40"
               >
-                다운로드 및 작동
+                설치 마법사 다운로드
               </button>
             </div>
           </div>
