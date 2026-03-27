@@ -1,154 +1,183 @@
+// ═══════════════════════════════════════════════════════════════
+//   RibbonBridge v7.0 — Production-Grade Universal Print Engine
+//   Epson ESC/P · HP PCL5 · GDI Fallback · Self-Updater
+// ═══════════════════════════════════════════════════════════════
+
 const express = require('express');
-const cors = require('cors');
+const cors    = require('cors');
 const { exec, execSync, spawn } = require('child_process');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
-const os = require('os');
+const os   = require('os');
 
-const app = express();
-const port = 8000;
-
-app.use(cors());
-app.use(express.json({ limit: '70mb' }));
-
-// ─── Engine Paths ──────────────────────────────────────────
+// ─── Constants ─────────────────────────────────────────────────
+const VERSION    = '7.0';
+const PORT       = 8000;
+const TMP_DIR    = path.join(os.tmpdir(), 'ribbon-saas');
+const FONT_DIR   = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
 const EPSON_AGENT = path.resolve(__dirname, 'drv_eps.exe');
 const HP_AGENT    = path.resolve(__dirname, 'drv_hp.exe');
 const HAS_EPSON   = fs.existsSync(EPSON_AGENT);
 const HAS_HP      = fs.existsSync(HP_AGENT);
+const UPDATE_URL  = 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip';
 
+// ─── App Setup ─────────────────────────────────────────────────
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '70mb' }));
+
+// Ensure tmp directory
+if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
+
+// ─── Boot Log ──────────────────────────────────────────────────
 console.log('╔══════════════════════════════════════════════════╗');
-console.log('║   RibbonBridge v6.1 - Universal Print Engine    ║');
-console.log('║   Epson ESC/P + HP PCL5 + GDI Fallback          ║');
+console.log(`║     RibbonBridge v${VERSION} — Universal Print Engine    ║`);
 console.log('╚══════════════════════════════════════════════════╝');
-console.log(`> Platform: ${os.platform()} ${os.release()}`);
-console.log(`> Node.js: ${process.version}`);
-console.log(`> Epson Engine: ${HAS_EPSON ? '✅ READY' : '❌ NOT FOUND'}`);
-console.log(`> HP Engine:    ${HAS_HP    ? '✅ READY' : '❌ NOT FOUND'}`);
-console.log(`> GDI Fallback: ✅ ALWAYS AVAILABLE (Windows built-in)`);
+console.log(`> Platform : ${os.platform()} ${os.release()}`);
+console.log(`> Node     : ${process.version}`);
+console.log(`> Epson    : ${HAS_EPSON ? '✅ Ready' : '⛔ Not found'}`);
+console.log(`> HP       : ${HAS_HP    ? '✅ Ready' : '⛔ Not found'}`);
+console.log(`> GDI      : ✅ Always available`);
 
-// ─── Printer Presets ────────────────────────────────────────
-let PRESETS = { models: {}, defaults: { epson: { leftMargin: 34.5 }, hp: { leftMargin: 34.5 }, other: { leftMargin: 34.5 } } };
-try {
-  const presetsPath = path.resolve(__dirname, 'printer_presets.json');
-  if (fs.existsSync(presetsPath)) {
-    PRESETS = JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
-    const modelCount = Object.keys(PRESETS.models).length;
-    console.log(`> Presets: ✅ ${modelCount} printer models loaded`);
-  } else {
-    console.log(`> Presets: ⚠️ printer_presets.json not found, using defaults`);
+// ─── Printer Presets ───────────────────────────────────────────
+const DEFAULT_PRESETS = {
+  models: {},
+  defaults: {
+    epson: { leftMargin: 34.5 },
+    hp:    { leftMargin: 34.5 },
+    other: { leftMargin: 34.5 }
   }
-} catch (e) {
-  console.log(`> Presets: ⚠️ Parse error: ${e.message}`);
+};
+
+function loadPresets() {
+  try {
+    const p = path.resolve(__dirname, 'printer_presets.json');
+    if (!fs.existsSync(p)) {
+      console.log('> Presets  : ⚠️  Not found, using defaults');
+      return DEFAULT_PRESETS;
+    }
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    console.log(`> Presets  : ✅ ${Object.keys(data.models || {}).length} models loaded`);
+    return data;
+  } catch (e) {
+    console.log(`> Presets  : ⚠️  Parse error — ${e.message}`);
+    return DEFAULT_PRESETS;
+  }
 }
 
-// Find matching preset for a printer name (fuzzy matching)
+const PRESETS = loadPresets();
+
+// ─── Brand / Engine Detection ──────────────────────────────────
+const BRAND_KEYWORDS = {
+  epson:   ['epson'],
+  hp:      ['hp', 'hewlett', 'packard', 'deskjet', 'officejet', 'laserjet', 'envy', 'photosmart', 'smart tank'],
+  canon:   ['canon', 'pixma', 'imageclass'],
+  brother: ['brother'],
+  samsung: ['samsung', 'xpress']
+};
+
+function detectBrand(printerName, driverName) {
+  const haystack = `${printerName || ''} ${driverName || ''}`.toLowerCase();
+  for (const [brand, keywords] of Object.entries(BRAND_KEYWORDS)) {
+    if (keywords.some(kw => haystack.includes(kw))) return brand;
+  }
+  return 'other';
+}
+
+function getEngineStrategy(brand) {
+  if (brand === 'epson' && HAS_EPSON) return { engine: 'escp', agent: EPSON_AGENT, label: 'Epson ESC/P RAW' };
+  if (brand === 'hp'    && HAS_HP)    return { engine: 'pcl5', agent: HP_AGENT,    label: 'HP PCL5 RAW' };
+  if (brand === 'epson')              return { engine: 'gdi',  agent: null, label: 'GDI (Epson agent missing)' };
+  if (brand === 'hp')                 return { engine: 'gdi',  agent: null, label: 'GDI (HP agent missing)' };
+  return { engine: 'gdi', agent: null, label: `GDI (${brand})` };
+}
+
 function findPreset(printerName) {
   const nameLower = (printerName || '').toLowerCase();
-  
-  // 1. Exact model match
+
+  // 1. Exact substring match
   for (const [model, preset] of Object.entries(PRESETS.models)) {
     if (nameLower.includes(model.toLowerCase())) {
       return { ...preset, matchedModel: model };
     }
   }
-  
-  // 2. Partial match: extract model numbers
+
+  // 2. Model number match (e.g. "8100" in "HP OfficeJet 8100")
   for (const [model, preset] of Object.entries(PRESETS.models)) {
-    // Extract numbers from model name (e.g., "HP OfficeJet 8100" → "8100")
-    const modelNums = model.match(/\d{3,}/g);
-    if (modelNums) {
-      for (const num of modelNums) {
-        if (nameLower.includes(num)) {
-          return { ...preset, matchedModel: model + ' (partial)' };
-        }
-      }
+    const nums = model.match(/\d{3,}/g);
+    if (nums && nums.some(n => nameLower.includes(n))) {
+      return { ...preset, matchedModel: `${model} (partial)` };
     }
   }
-  
+
   // 3. Brand defaults
   const brand = detectBrand(printerName, '');
   const defaults = PRESETS.defaults[brand] || PRESETS.defaults.other;
   return { ...defaults, matchedModel: `${brand} default` };
 }
 
-// ─── Brand Detection ────────────────────────────────────────
-function detectBrand(printerName, driverName) {
-  const name = ((printerName || '') + ' ' + (driverName || '')).toLowerCase();
-  
-  if (name.includes('epson'))    return 'epson';
-  if (name.includes('hp') || name.includes('hewlett') || name.includes('packard') 
-      || name.includes('deskjet') || name.includes('officejet') || name.includes('laserjet')
-      || name.includes('envy') || name.includes('photosmart') || name.includes('smart tank'))
-    return 'hp';
-  if (name.includes('canon') || name.includes('pixma') || name.includes('imageclass'))
-    return 'canon';
-  if (name.includes('brother'))  return 'brother';
-  if (name.includes('samsung') || name.includes('xpress'))
-    return 'samsung';
-  
-  return 'other';
-}
+// ─── Printer Cache ─────────────────────────────────────────────
+const cachedPrinterInfo = {};   // { name: { brand, driver } }
 
-function getEngineStrategy(brand) {
-  switch (brand) {
-    case 'epson':
-      return HAS_EPSON 
-        ? { engine: 'escp', agent: EPSON_AGENT, label: 'Epson ESC/P RAW' }
-        : { engine: 'gdi',  agent: null,        label: 'GDI Fallback (Epson agent missing)' };
-    case 'hp':
-      return HAS_HP
-        ? { engine: 'pcl5', agent: HP_AGENT,    label: 'HP PCL5 RAW' }
-        : { engine: 'gdi',  agent: null,        label: 'GDI Fallback (HP agent missing)' };
-    default:
-      return { engine: 'gdi', agent: null, label: `GDI Fallback (${brand})` };
-  }
-}
+// ─── Routes ════════════════════════════════════════════════════
 
-// ─── Health Check ──────────────────────────────────────────
-app.get('/', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    version: '6.2.1',
+// Health Check (lightweight — used by 5s polling)
+app.get('/', (_req, res) => {
+  res.json({
+    status: 'ok',
+    version: VERSION,
     message: 'RibbonBridge Universal Engine Active',
-    engines: {
-      epson_escp: HAS_EPSON,
-      hp_pcl5: HAS_HP,
-      gdi_fallback: true
-    },
+    engines: { epson_escp: HAS_EPSON, hp_pcl5: HAS_HP, gdi_fallback: true },
     uptime: Math.floor(process.uptime()),
     platform: os.platform()
   });
 });
 
-// ─── Font Directory ─────────────────────────────────────────
-const WINDOWS_FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
+// Detailed status (diagnostics page)
+app.get('/api/status', (_req, res) => {
+  res.json({
+    status: 'ok',
+    version: VERSION,
+    uptime: Math.floor(process.uptime()),
+    engines: {
+      epson_escp: { available: HAS_EPSON, path: EPSON_AGENT },
+      hp_pcl5:    { available: HAS_HP,    path: HP_AGENT },
+      gdi:        { available: true,      path: 'Windows built-in' }
+    },
+    cached_printers: Object.keys(cachedPrinterInfo).length,
+    temp_dir: TMP_DIR,
+    node_version: process.version,
+    platform: `${os.platform()} ${os.release()}`,
+    memory: {
+      used_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total_mb: Math.round(os.totalmem() / 1024 / 1024)
+    }
+  });
+});
 
-app.get('/api/fonts', (req, res) => {
+// ─── Font Directory ────────────────────────────────────────────
+app.get('/api/fonts', (_req, res) => {
   try {
-    const fontExtensions = ['.ttf', '.otf', '.ttc', '.woff', '.woff2'];
+    const EXTS = new Set(['.ttf', '.otf', '.ttc', '.woff', '.woff2']);
     const fonts = [];
 
-    if (fs.existsSync(WINDOWS_FONT_DIR)) {
-      const files = fs.readdirSync(WINDOWS_FONT_DIR);
-      for (const f of files) {
+    if (fs.existsSync(FONT_DIR)) {
+      for (const f of fs.readdirSync(FONT_DIR)) {
         const ext = path.extname(f).toLowerCase();
-        if (fontExtensions.includes(ext)) {
-          try {
-            const fullPath = path.join(WINDOWS_FONT_DIR, f);
-            const stat = fs.statSync(fullPath);
-            fonts.push({
-              filename: f,
-              name: path.parse(f).name,
-              size_kb: Math.round(stat.size / 1024 * 10) / 10,
-              extension: ext
-            });
-          } catch (e) { /* skip unreadable */ }
-        }
+        if (!EXTS.has(ext)) continue;
+        try {
+          const stat = fs.statSync(path.join(FONT_DIR, f));
+          fonts.push({
+            filename: f,
+            name: path.parse(f).name,
+            size_kb: Math.round(stat.size / 1024 * 10) / 10,
+            extension: ext
+          });
+        } catch { /* skip unreadable */ }
       }
     }
 
-    fonts.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    fonts.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     res.json({ status: 'success', count: fonts.length, fonts });
   } catch (err) {
     res.json({ status: 'error', message: err.message });
@@ -156,85 +185,69 @@ app.get('/api/fonts', (req, res) => {
 });
 
 app.get('/api/fonts/file/:fontFilename', (req, res) => {
+  const safeName = path.basename(req.params.fontFilename);
+  const fontPath = path.join(FONT_DIR, safeName);
+  if (!fs.existsSync(fontPath)) {
+    return res.status(404).json({ status: 'error', message: `Not found: ${safeName}` });
+  }
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+  fs.createReadStream(fontPath).pipe(res);
+});
+
+// ─── Printer List ──────────────────────────────────────────────
+app.get('/api/printers', (_req, res) => {
+  const mapPrinter = (p, driverName = '') => {
+    const brand = detectBrand(p.Name || p, driverName);
+    const strategy = getEngineStrategy(brand);
+    cachedPrinterInfo[p.Name || p] = { brand, driver: driverName };
+    return {
+      name: p.Name || p,
+      status: p.PrinterStatus === 0 ? 'Ready' : p.PrinterStatus === 1 ? 'Paused' : 'Busy',
+      model: p.Name || p,
+      brand,
+      driver: driverName,
+      port: p.PortName || '',
+      engine: strategy.label
+    };
+  };
+
+  // Primary: Get-Printer (modern)
   try {
-    const safeName = path.basename(req.params.fontFilename);
-    const fontPath = path.join(WINDOWS_FONT_DIR, safeName);
-    if (!fs.existsSync(fontPath)) {
-      return res.status(404).json({ status: 'error', message: `Font not found: ${safeName}` });
-    }
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
-    fs.createReadStream(fontPath).pipe(res);
+    const cmd = `powershell -NoProfile -Command "Get-Printer | Select-Object Name, PrinterStatus, DriverName, PortName | ConvertTo-Json -Compress"`;
+    const raw = execSync(cmd, { timeout: 10000, encoding: 'utf8' });
+    let list = JSON.parse(raw || '[]');
+    if (!Array.isArray(list)) list = [list];
+
+    const data = list.filter(p => p.Name).map(p => mapPrinter(p, p.DriverName || ''));
+    console.log(`[PRINTERS] ${data.length} found: ${data.map(p => p.name).join(', ')}`);
+    return res.json({ status: 'success', data });
+  } catch { /* fall through */ }
+
+  // Fallback: WMI
+  try {
+    const cmd = `powershell -NoProfile -Command "Get-WmiObject -Query 'SELECT Name FROM Win32_Printer' | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress"`;
+    const raw = execSync(cmd, { timeout: 10000, encoding: 'utf8' });
+    let names = JSON.parse(raw || '[]');
+    if (!Array.isArray(names)) names = [names];
+
+    const data = names.filter(Boolean).map(n => mapPrinter({ Name: n, PrinterStatus: 0 }));
+    return res.json({ status: 'success', data });
   } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
+    return res.json({ status: 'error', message: err.message });
   }
 });
 
-// ─── Printer Cache ──────────────────────────────────────────
-let cachedPrinterInfo = {}; // { printerName: { brand, driver, ... } }
-
-app.get('/api/printers', (req, res) => {
-  try {
-    const psCommand = `powershell -NoProfile -Command "Get-Printer | Select-Object Name, PrinterStatus, DriverName, PortName | ConvertTo-Json -Compress"`;
-    const output = execSync(psCommand, { timeout: 10000, encoding: 'utf8' });
-    let printers = JSON.parse(output || '[]');
-    if (!Array.isArray(printers)) printers = [printers];
-
-    const data = printers
-      .filter(p => p.Name)
-      .map(p => {
-        const brand = detectBrand(p.Name, p.DriverName);
-        const strategy = getEngineStrategy(brand);
-        
-        // Cache for later print routing
-        cachedPrinterInfo[p.Name] = { brand, driver: p.DriverName || '' };
-        
-        return {
-          name: p.Name,
-          status: p.PrinterStatus === 0 ? 'Ready' : (p.PrinterStatus === 1 ? 'Paused' : 'Busy'),
-          model: p.Name,
-          brand,
-          driver: p.DriverName || '',
-          port: p.PortName || '',
-          engine: strategy.label  // 사용자에게 어떤 엔진이 사용될지 표시
-        };
-      });
-
-    console.log(`[PRINTERS] Found ${data.length} printers:`,
-      data.map(p => `${p.name} (${p.brand}→${p.engine})`).join(', ')
-    );
-    res.json({ status: 'success', data });
-  } catch (err) {
-    console.error('[PRINTERS] Error:', err.message);
-    // WMI Fallback
-    try {
-      const wmiCommand = `powershell -NoProfile -Command "Get-WmiObject -Query 'SELECT Name FROM Win32_Printer' | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress"`;
-      const wmiOutput = execSync(wmiCommand, { timeout: 10000, encoding: 'utf8' });
-      let names = JSON.parse(wmiOutput || '[]');
-      if (!Array.isArray(names)) names = [names];
-      const data = names.filter(n => n).map(n => {
-        const brand = detectBrand(n, '');
-        const strategy = getEngineStrategy(brand);
-        cachedPrinterInfo[n] = { brand, driver: '' };
-        return { name: n, status: 'Ready', model: n, brand, driver: '', port: '', engine: strategy.label };
-      });
-      res.json({ status: 'success', data });
-    } catch (err2) {
-      res.json({ status: 'error', message: err2.message });
-    }
-  }
-});
-
-// ─── Auto-Pairing ──────────────────────────────────────────
+// ─── Auto-Pairing ──────────────────────────────────────────────
 app.post('/api/pair', (req, res) => {
-  const { user_id } = req.body || {};
-  if (user_id) {
-    console.log(`[PAIR] Paired with user: ${user_id.substring(0, 8)}...`);
-  }
+  const uid = req.body?.user_id;
+  if (uid) console.log(`[PAIR] user: ${uid.substring(0, 8)}…`);
   res.json({ status: 'success', message: 'Paired ok' });
 });
 
-// ─── UNIVERSAL PRINT ENGINE ────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//   UNIVERSAL PRINT ENGINE
+// ════════════════════════════════════════════════════════════════
 app.post('/api/print_image', async (req, res) => {
   const { printer_name, image_base64, width_mm, length_mm, margin_offset_mm } = req.body;
 
@@ -242,219 +255,186 @@ app.post('/api/print_image', async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Missing printer_name or image_base64' });
   }
 
-  const tmpDir = path.join(os.tmpdir(), 'ribbon-saas');
-  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const tmpFile = path.join(TMP_DIR, `${jobId}.png`);
 
-  const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  const tmpFilePath = path.join(tmpDir, `${jobId}.png`);
-  
   try {
-    // 1. Decode & Save Image
-    const image_data = image_base64.split(',')[1];
-    if (!image_data) {
-      return res.json({ status: 'error', message: 'Invalid image_base64 format' });
-    }
-    fs.writeFileSync(tmpFilePath, Buffer.from(image_data, 'base64'));
+    // 1. Decode & Save
+    const rawData = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
+    if (!rawData) return res.json({ status: 'error', message: 'Invalid image_base64 format' });
+    fs.writeFileSync(tmpFile, Buffer.from(rawData, 'base64'));
+    const fileSizeKB = Math.round(fs.statSync(tmpFile).size / 1024);
 
-    const fileSizeKB = Math.round(fs.statSync(tmpFilePath).size / 1024);
-
-    // 2. Detect brand & strategy
+    // 2. Brand & Preset
     const cached = cachedPrinterInfo[printer_name];
-    let detectedBrand = cached ? cached.brand : detectBrand(printer_name, '');
-    
-    // 2.5 Find preset & Merge Settings
+    let brand = cached?.brand || detectBrand(printer_name, '');
     const preset = findPreset(printer_name);
-    
-    // [Fix] If brand detection missed it but preset has a brand, use that!
-    if ((detectedBrand === 'other' || !detectedBrand) && preset.brand) {
-      detectedBrand = preset.brand;
-    }
-    const brand = detectedBrand;
+
+    // Preset brand overrides heuristic if heuristic was generic
+    if ((brand === 'other') && preset.brand) brand = preset.brand;
+
     const strategy = getEngineStrategy(brand);
-    
     const leftMargin = preset.leftMargin || 34.5;
     const userOffset = parseFloat(margin_offset_mm) || 0;
-    
-    // effectiveLeftMargin is the physical distance from head 0 point to the ribbon's left edge
-    const effectiveLeftMargin = leftMargin + userOffset;
-    
-    // marginCenter is used by Raw engines (ESC/P, PCL5)
-    const marginCenter = effectiveLeftMargin + (width_mm / 2.0);
+    const effLeftMargin = leftMargin + userOffset;
+    const marginCenter  = effLeftMargin + (width_mm / 2.0);
 
-    // [Fix] Determine final engine (Preset preference > Brand heuristic)
+    // Preset can force a specific engine
     let finalEngine = strategy.engine;
-    if (preset.engine && preset.engine !== 'gdi') {
-       if (preset.engine === 'escp' && HAS_EPSON) finalEngine = 'escp';
-       if (preset.engine === 'pcl5' && HAS_HP) finalEngine = 'pcl5';
-    }
+    if (preset.engine === 'escp' && HAS_EPSON) finalEngine = 'escp';
+    if (preset.engine === 'pcl5' && HAS_HP)    finalEngine = 'pcl5';
 
-    console.log(`[PRINT] ─── Job ${jobId} ──────────────────`);
-    console.log(`[PRINT] Printer: ${printer_name}`);
-    console.log(`[PRINT] Brand: ${brand.toUpperCase()} | Engine: ${finalEngine}`);
-    console.log(`[PRINT] Preset: ${preset.matchedModel} (Base: ${leftMargin}mm, UserOffset: ${userOffset}mm)`);
-    console.log(`[PRINT] Eff. Left Margin: ${effectiveLeftMargin.toFixed(1)}mm | Margin Center: ${marginCenter.toFixed(1)}mm`);
-    console.log(`[PRINT] Size: ${width_mm}x${length_mm}mm | Image: ${fileSizeKB}KB`);
+    console.log(`[PRINT] ─── ${jobId} ───`);
+    console.log(`[PRINT] Printer: ${printer_name} | Brand: ${brand} | Engine: ${finalEngine}`);
+    console.log(`[PRINT] Preset: ${preset.matchedModel} | Margin: ${effLeftMargin.toFixed(1)}mm | Size: ${width_mm}×${length_mm}mm | ${fileSizeKB}KB`);
 
-    // 3. Route to appropriate engine
+    // 3. Execute
     if (finalEngine === 'escp' || finalEngine === 'pcl5') {
-      const agent = (finalEngine === 'escp') ? EPSON_AGENT : HP_AGENT;
-      // 5th argument = margin_center_mm
-      const command = `"${agent}" "${printer_name}" "${tmpFilePath}" ${width_mm} ${length_mm} ${marginCenter.toFixed(1)}`;
-      
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Print timeout (60s). Check printer connection.'));
-        }, 60000);
+      const agent = finalEngine === 'escp' ? EPSON_AGENT : HP_AGENT;
+      const cmd = `"${agent}" "${printer_name}" "${tmpFile}" ${width_mm} ${length_mm} ${marginCenter.toFixed(1)}`;
 
-        exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
-          clearTimeout(timeout);
-          try { fs.unlinkSync(tmpFilePath); } catch (e) {}
-
-          if (error) {
-            const errMsg = (stderr || stdout || error.message).trim();
-            console.error(`[PRINT] ${finalEngine.toUpperCase()} Error: ${errMsg}`);
-            
-            // Native engine failed → try GDI fallback
-            console.log(`[PRINT] ⚠️ Native engine failed, attempting GDI fallback...`);
-            printViaGDI(printer_name, tmpFilePath, width_mm, length_mm, jobId, effectiveLeftMargin)
-              .then(() => {
-                console.log(`[PRINT] ✅ GDI Fallback succeeded for ${jobId}`);
-                resolve();
-              })
-              .catch((gdiErr) => {
-                reject(new Error(`Native(${errMsg}) + GDI(${gdiErr.message}) both failed`));
-              });
-            return;
-          }
-
-          if (stdout && stdout.includes('SUCCESS')) {
-            console.log(`[PRINT] ✅ ${finalEngine.toUpperCase()} Success`);
-            resolve();
-          } else {
-            console.error(`[PRINT] Unexpected output: ${stdout}`);
-            reject(new Error(`${finalEngine} failed: ${(stdout || 'No output').trim()}`));
-          }
-        });
-      });
-
-      return res.json({ status: 'success', method: finalEngine, brand });
-
+      try {
+        await execNative(cmd, tmpFile);
+        console.log(`[PRINT] ✅ ${finalEngine.toUpperCase()} success`);
+        return res.json({ status: 'success', method: finalEngine, brand });
+      } catch (nativeErr) {
+        console.log(`[PRINT] ⚠️ Native failed (${nativeErr.message}), trying GDI…`);
+        try {
+          await printViaGDI(printer_name, tmpFile, width_mm, length_mm, jobId, effLeftMargin);
+          console.log(`[PRINT] ✅ GDI fallback success`);
+          return res.json({ status: 'success', method: 'gdi_fallback', brand });
+        } catch (gdiErr) {
+          throw new Error(`Native(${nativeErr.message}) + GDI(${gdiErr.message}) both failed`);
+        }
+      }
     } else {
-      // ── GDI Fallback ──
-      // [Fix] Pass effectiveLeftMargin to GDI
-      await printViaGDI(printer_name, tmpFilePath, width_mm, length_mm, jobId, effectiveLeftMargin);
+      await printViaGDI(printer_name, tmpFile, width_mm, length_mm, jobId, effLeftMargin);
+      console.log(`[PRINT] ✅ GDI success`);
       return res.json({ status: 'success', method: 'gdi', brand });
     }
-
   } catch (err) {
-    try { fs.unlinkSync(tmpFilePath); } catch (e) {}
-    console.error(`[PRINT] ❌ Final error for ${jobId}:`, err.message);
-    res.json({ status: 'error', message: err.message });
+    console.error(`[PRINT] ❌ ${jobId}: ${err.message}`);
+    return res.json({ status: 'error', message: err.message });
+  } finally {
+    // Always clean up temp file
+    try { fs.unlinkSync(tmpFile); } catch {}
   }
 });
 
-// ─── GDI PrintDocument Fallback ──────────────────────────────
-function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId, leftMarginMM = 0) {
-  // Re-create temp file if already deleted (for fallback path)
-  const tempExists = fs.existsSync(imagePath);
-  
+// ─── Native Engine Executor ────────────────────────────────────
+function execNative(command, tmpFile) {
   return new Promise((resolve, reject) => {
-    const psScript = `
-      Add-Type -AssemblyName System.Drawing
-      
-      $printerName = '${printerName.replace(/'/g, "''")}'
-      $imagePath = '${(tempExists ? imagePath : '').replace(/\\/g, '\\\\').replace(/'/g, "''")}'
-      $widthMM = ${widthMM}
-      $lengthMM = ${lengthMM}
-      $leftMarginMM = ${leftMarginMM}
-      
-      if (-not (Test-Path $imagePath)) {
-        Write-Error "Image file not found: $imagePath"
-        exit 1
+    exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error((stderr || stdout || error.message).trim()));
+        return;
       }
-      
-      try {
-        $img = [System.Drawing.Image]::FromFile($imagePath)
-        
-        $pd = New-Object System.Drawing.Printing.PrintDocument
-        $pd.PrinterSettings.PrinterName = $printerName
-        
-        if (-not $pd.PrinterSettings.IsValid) {
-          Write-Error "Printer not found or invalid: $printerName"
-          exit 1
-        }
-        
-        # Custom paper size in 100ths of an inch
-        $w100 = [int]($widthMM / 25.4 * 100)
-        $h100 = [int]($lengthMM / 25.4 * 100)
-        $offsetX100 = [int]($leftMarginMM / 25.4 * 100)
-        
-        # We set the total PaperWidth to include the offset area (Physical feeding width)
-        # Most ribbon printers feed 100mm wide paper
-        $totalWidth100 = $offsetX100 + $w100
-        
-        $customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonCustom", $totalWidth100, $h100)
-        $pd.DefaultPageSettings.PaperSize = $customPaper
-        $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
-        $pd.DefaultPageSettings.Landscape = $false
-        
-        $printed = $false
-        $handler = {
-          param($sender, $e)
-          if (-not $printed) {
-            # Draw with horizontal offset for exact alignment
-            $destRect = New-Object System.Drawing.Rectangle($offsetX100, 0, $w100, $h100)
-            $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-            $e.Graphics.DrawImage($img, $destRect)
-            $printed = $true
-          }
-          $e.HasMorePages = $false
-        }
-        
-        $pd.add_PrintPage($handler)
-        $pd.Print()
-        $img.Dispose()
-        $pd.Dispose()
-        
-        Write-Output "GDI_SUCCESS"
-      } catch {
-        Write-Error $_.Exception.Message
-        exit 1
-      }
-    `;
-    
-    const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
-      timeout: 30000
-    });
-    
-    let stdout = '', stderr = '';
-    ps.stdout.on('data', (data) => { stdout += data.toString(); });
-    ps.stderr.on('data', (data) => { stderr += data.toString(); });
-    
-    ps.on('close', (code) => {
-      try { fs.unlinkSync(imagePath); } catch (e) {}
-      
-      if (code === 0 && stdout.includes('GDI_SUCCESS')) {
-        console.log(`[PRINT] ✅ GDI Success for ${jobId}`);
+      if (stdout && stdout.includes('SUCCESS')) {
         resolve();
       } else {
-        console.error(`[PRINT] GDI Error: ${stderr || stdout}`);
-        reject(new Error(`GDI: ${(stderr || stdout || 'Unknown error').trim()}`));
+        reject(new Error(`Unexpected: ${(stdout || 'No output').trim()}`));
       }
-    });
-    
-    ps.on('error', (err) => {
-      try { fs.unlinkSync(imagePath); } catch (e) {}
-      reject(err);
     });
   });
 }
 
-// ─── Auto Updater ──────────────────────────────────────────
-app.post('/api/update', (req, res) => {
+// ─── GDI PrintDocument Fallback ────────────────────────────────
+function printViaGDI(printerName, imagePath, widthMM, lengthMM, jobId, leftMarginMM = 0) {
+  if (!fs.existsSync(imagePath)) {
+    return Promise.reject(new Error('Image file not found for GDI'));
+  }
+
+  return new Promise((resolve, reject) => {
+    // Sanitize for PowerShell single-quote embedding
+    const safePrinter = printerName.replace(/'/g, "''");
+    const safeImage   = imagePath.replace(/\\/g, '\\\\').replace(/'/g, "''");
+
+    const psScript = `
+Add-Type -AssemblyName System.Drawing
+
+$printerName = '${safePrinter}'
+$imagePath   = '${safeImage}'
+$widthMM     = ${widthMM}
+$lengthMM    = ${lengthMM}
+$leftMM      = ${leftMarginMM}
+
+if (-not (Test-Path $imagePath)) {
+  Write-Error "Image not found: $imagePath"
+  exit 1
+}
+
+try {
+  $img = [System.Drawing.Image]::FromFile($imagePath)
+  $pd  = New-Object System.Drawing.Printing.PrintDocument
+  $pd.PrinterSettings.PrinterName = $printerName
+
+  if (-not $pd.PrinterSettings.IsValid) {
+    Write-Error "Invalid printer: $printerName"
+    exit 1
+  }
+
+  # Convert mm → 100ths of inch
+  $w100      = [int]($widthMM  / 25.4 * 100)
+  $h100      = [int]($lengthMM / 25.4 * 100)
+  $offsetX   = [int]($leftMM   / 25.4 * 100)
+  $totalW    = $offsetX + $w100
+
+  $paper = New-Object System.Drawing.Printing.PaperSize("RibbonCustom", $totalW, $h100)
+  $pd.DefaultPageSettings.PaperSize  = $paper
+  $pd.DefaultPageSettings.Margins    = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+  $pd.DefaultPageSettings.Landscape  = $false
+
+  $printed = $false
+  $handler = {
+    param($sender, $e)
+    if (-not $printed) {
+      $dest = New-Object System.Drawing.Rectangle($offsetX, 0, $w100, $h100)
+      $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $e.Graphics.DrawImage($img, $dest)
+      $printed = $true
+    }
+    $e.HasMorePages = $false
+  }
+
+  $pd.add_PrintPage($handler)
+  $pd.Print()
+  $img.Dispose()
+  $pd.Dispose()
+
+  Write-Output "GDI_SUCCESS"
+} catch {
+  Write-Error $_.Exception.Message
+  exit 1
+}
+`;
+
+    const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
+      timeout: 30000
+    });
+
+    let stdout = '', stderr = '';
+    ps.stdout.on('data', d => { stdout += d; });
+    ps.stderr.on('data', d => { stderr += d; });
+
+    ps.on('close', code => {
+      if (code === 0 && stdout.includes('GDI_SUCCESS')) {
+        resolve();
+      } else {
+        reject(new Error(`GDI: ${(stderr || stdout || 'Unknown error').trim()}`));
+      }
+    });
+
+    ps.on('error', err => reject(err));
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   AUTO UPDATER
+// ═══════════════════════════════════════════════════════════════
+app.post('/api/update', (_req, res) => {
   res.json({ status: 'ok', message: 'Update initiated' });
-  console.log(`\n> 📥 UPDATE INITIATED: Downloading new version from GitHub...`);
-  
+  console.log('\n> 📥 AUTO UPDATE: starting…');
+
   const batPath = path.join(process.cwd(), 'updater.bat');
   const lines = [
     '@echo off',
@@ -467,7 +447,7 @@ app.post('/api/update', (req, res) => {
     'taskkill /F /IM launch_service.exe >nul 2>&1',
     '',
     'echo Downloading latest version...',
-    "powershell -Command \"[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip' -OutFile 'update.zip' -TimeoutSec 60\"",
+    `powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${UPDATE_URL}' -OutFile 'update.zip' -TimeoutSec 60"`,
     '',
     'if not exist update.zip (',
     '  echo Download failed!',
@@ -476,7 +456,7 @@ app.post('/api/update', (req, res) => {
     ')',
     '',
     'echo Extracting...',
-    "powershell -Command \"Expand-Archive -Path 'update.zip' -DestinationPath 'upd_tmp' -Force\"",
+    `powershell -Command "Expand-Archive -Path 'update.zip' -DestinationPath 'upd_tmp' -Force"`,
     '',
     'echo Applying update...',
     'copy /Y upd_tmp\\*.exe . >nul 2>&1',
@@ -494,49 +474,30 @@ app.post('/api/update', (req, res) => {
   ];
 
   fs.writeFileSync(batPath, lines.join('\r\n'));
-  
+
   setTimeout(() => {
-    const childProcess = spawn('cmd.exe', ['/c', batPath], {
+    const child = spawn('cmd.exe', ['/c', batPath], {
       detached: true,
       stdio: 'ignore',
       cwd: process.cwd()
     });
-    childProcess.unref();
+    child.unref();
     process.exit(0);
   }, 1000);
 });
 
-// ─── Status / Diagnostics ──────────────────────────────────
-app.get('/api/status', (req, res) => {
-  res.json({
-    status: 'ok',
-    version: '6.2.1',
-    uptime: Math.floor(process.uptime()),
-    engines: {
-      epson_escp: { available: HAS_EPSON, path: EPSON_AGENT },
-      hp_pcl5:    { available: HAS_HP,    path: HP_AGENT },
-      gdi:        { available: true,      path: 'Windows built-in' }
-    },
-    cached_printers: Object.keys(cachedPrinterInfo).length,
-    temp_dir: path.join(os.tmpdir(), 'ribbon-saas'),
-    node_version: process.version,
-    platform: `${os.platform()} ${os.release()}`,
-    memory: {
-      used_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      total_mb: Math.round(os.totalmem() / 1024 / 1024)
-    }
-  });
+// ─── Graceful Shutdown ─────────────────────────────────────────
+process.on('uncaughtException', err => {
+  console.error('[FATAL] Uncaught exception:', err.message);
+});
+process.on('unhandledRejection', reason => {
+  console.error('[FATAL] Unhandled rejection:', reason);
 });
 
-// ─── Start Server ──────────────────────────────────────────
-app.listen(port, '127.0.0.1', () => {
-  console.log(`\n> 🚀 RibbonBridge v6.1 listening on http://localhost:${port}`);
-  console.log(`>`);
-  console.log(`> Print Strategy:`);
-  console.log(`>   Epson → ESC/P RAW (roll mode, unlimited length)`);
-  console.log(`>   HP    → PCL5 RAW (custom paper, full control)`);
-  console.log(`>   Other → GDI PrintDocument (driver-based)`);
-  console.log(`>   All   → Auto GDI fallback on native failure`);
-  console.log(`>`);
-  console.log(`> Ready for print jobs! 🖨️`);
+// ─── Start Server ──────────────────────────────────────────────
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`\n> 🚀 RibbonBridge v${VERSION} listening on http://localhost:${PORT}`);
+  console.log(`>    Epson → ESC/P RAW | HP → PCL5 RAW | Other → GDI`);
+  console.log(`>    Auto GDI fallback on native failure`);
+  console.log(`>    Ready for print jobs! 🖨️\n`);
 });
