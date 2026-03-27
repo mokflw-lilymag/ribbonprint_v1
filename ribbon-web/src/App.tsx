@@ -752,11 +752,11 @@ const RibbonCanvas = ({
         {/* --- SHOP LOGO INJECTION --- */}
         {printLogo && shopLogo && (
             <div 
-              className="absolute left-0 right-0 flex justify-center items-start pointer-events-none"
+              className="absolute left-0 right-0 flex justify-center items-center pointer-events-none"
               style={{
-                top: `${(length - marginBottom + 15) * scaleRatio}px`,
+                top: `${(length - marginBottom) * scaleRatio}px`,
                 transform: `translateX(${marginOffset * scaleRatio}px)`,
-                height: `${Math.max(0, marginBottom - 20) * scaleRatio}px`,
+                height: `${marginBottom * scaleRatio}px`,
                 paddingLeft: `${lace * scaleRatio}px`,
                 paddingRight: `${lace * scaleRatio}px`
               }}
@@ -765,7 +765,7 @@ const RibbonCanvas = ({
                  crossOrigin="anonymous"
                  src={shopLogo} 
                  alt="Logo" 
-                 style={{ width: '70%', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', opacity: 0.7 }} 
+                 style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 0.5 }} 
                />
             </div>
         )}
@@ -1549,7 +1549,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="pt-2 border-t border-slate-700/50">
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs text-slate-400 font-medium flex items-center gap-1">
-                🏪 매장 로고 <span className="text-[10px] text-slate-500">(하단 15mm 아래)</span>
+                🏪 매장 로고 <span className="text-[10px] text-slate-500">(하단 여백 중앙)</span>
               </label>
               <div className="flex items-center gap-2">
                 {shopLogo && (
