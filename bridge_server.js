@@ -402,11 +402,6 @@ try {
     if (-not $printed) {
       $dest = New-Object System.Drawing.Rectangle($offsetX, 0, $w100, $h100)
       $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-      
-      # [CRITICAL FIX] 리본 인쇄 특성상 '끝(하단)'부터 인쇄되어 나와야 사용자가 보기에 자연스럽게 읽힙니다.
-      # 따라서 이미지를 180도 회전(상하/좌우 반전)시킨 뒤 출력합니다.
-      $img.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone)
-      
       $e.Graphics.DrawImage($img, $dest)
       $printed = $true
     }

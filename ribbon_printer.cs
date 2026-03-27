@@ -258,11 +258,6 @@ public class RibbonPrinter {
                 using (Graphics g = Graphics.FromImage(resBmp)) {
                     g.Clear(Color.White);
                     g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    
-                    // [표준화] 리본은 특성상 끝(아랫단)부터 인쇄기를 통과해야
-                    // 정방향으로 매달려 보입니다. 따라서 이미지를 180도 회전시킵니다.
-                    origBmp.RotateFlip(RotateFlipType.Rotate180FlipNone);
-                    
                     g.DrawImage(origBmp, 0, 0, pxWidth, pxHeight);
                 }
 
