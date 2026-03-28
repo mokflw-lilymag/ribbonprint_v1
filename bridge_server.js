@@ -230,8 +230,7 @@ $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 $widthUnits = [int](210 / 25.4 * 100)
 $totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
 $customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
-# [핵심] RawKind를 0(Custom)으로 주입하여 드라이버의 A4 강제 회귀를 방지
-$customPaper.RawKind = 0 
+$customPaper.RawKind = 256 
 
 $pd.DefaultPageSettings.PaperSize = $customPaper
 $pd.DefaultPageSettings.Landscape = $false
@@ -248,10 +247,18 @@ $pd.Add_PrintPage({
   foreach ($path in $images) {
     if (Test-Path $path) {
       $img = [System.Drawing.Image]::FromFile($path)
-      # [V15.1 정규] 사용자가 웹 UI에서 맞춘 위치(safeX)에 정확히 출력
+      # [V15.6] 정밀 좌표 인쇄 - 사용자 여백(safeX) 반영
       $destRect = New-Object System.Drawing.RectangleF(${safeX}, $currentY, ${widthMM}, ${lengthMM})
       $g.DrawImage($img, $destRect)
       
+      # [V15.6] 중간선 추가: 두 리본이 만나는 지점에 1mm 두께의 가이드선 생성
+      if ($path -eq $images[0] -and $images.Count -gt 1) {
+          $lineY = $currentY + ${lengthMM}
+          $blackPen = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 1)
+          # 리본 실 출력 너비만큼 선 긋기
+          $g.DrawLine($blackPen, ${safeX}, $lineY, (${safeX} + ${widthMM}), $lineY)
+      }
+
       $currentY += ${lengthMM}
       $img.Dispose()
     }
