@@ -1826,32 +1826,6 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
         <div className="h-px bg-slate-700/50 my-2" />
 
-        {/* 8. 매장 로고 */}
-        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">🏪 내 점포 로고</label>
-            <div className="flex items-center gap-2">
-              {shopLogo && <button onClick={() => { setShopLogo(null); setPrintLogo(false); }} className="text-[10px] text-red-500 font-bold hover:text-red-400">삭제</button>}
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
-                <div className="w-7 h-4 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full"></div>
-              </label>
-            </div>
-          </div>
-          {!shopLogo ? (
-            <label className="flex items-center justify-center w-full p-3 border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:bg-slate-900 transition text-slate-500 hover:text-slate-300">
-              <span className="text-xs flex flex-col items-center gap-1"><Upload size={18}/> 로고 등록</span>
-              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-            </label>
-          ) : (
-             <div className="p-2 bg-white rounded-lg flex justify-center">
-               <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain" />
-             </div>
-          )}
-        </div>
-
-        <div className="h-px bg-slate-700/50 my-2" />
-
         {/* 9. 자주 쓰는 문구 */}
         <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
           <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
@@ -1885,18 +1859,24 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           </div>
         </div>
 
-        {/* 11. 매장 로고 (Duplicate for specific workflow) */}
+        {/* 10. 매장 로고 (Final Section) */}
         <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 mt-4 mb-20">
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">🏪 하단 매장 로고</label>
+            <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">🏪 내 점포 로고</label>
             <div className="flex items-center gap-2">
+              {shopLogo && <button onClick={() => { setShopLogo(null); setPrintLogo(false); }} className="text-[10px] text-red-500 font-bold hover:text-red-400">삭제</button>}
               <label className="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
                 <div className="w-7 h-4 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full"></div>
               </label>
             </div>
           </div>
-          {shopLogo && (
+          {!shopLogo ? (
+            <label className="flex items-center justify-center w-full p-3 border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:bg-slate-900 transition text-slate-500 hover:text-slate-300">
+              <span className="text-xs flex flex-col items-center gap-1"><Upload size={18}/> 로고 등록</span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+            </label>
+          ) : (
              <div className="p-2 bg-white rounded-lg flex justify-center">
                <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain" />
              </div>
