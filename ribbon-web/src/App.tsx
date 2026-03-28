@@ -1881,7 +1881,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         </div>
 
         {/* 10. 특수 기호 */}
-        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 mt-4 mb-10">
+        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 mt-4">
           <h3 className="text-xs font-bold text-slate-300 mb-2">특수 기호</h3>
           <div className="grid grid-cols-6 gap-1">
             {SYMBOL_BANK.map(sym => (
@@ -1890,6 +1890,24 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                </button>
             ))}
           </div>
+        </div>
+
+        {/* 11. 매장 로고 (Duplicate for specific workflow) */}
+        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 mt-4 mb-20">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">🏪 하단 매장 로고</label>
+            <div className="flex items-center gap-2">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
+                <div className="w-7 h-4 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full"></div>
+              </label>
+            </div>
+          </div>
+          {shopLogo && (
+             <div className="p-2 bg-white rounded-lg flex justify-center">
+               <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain" />
+             </div>
+          )}
         </div>
 
         {/* Tip / Manual Button */}
