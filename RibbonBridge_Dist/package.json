@@ -1,0 +1,13 @@
+{
+  "name": "ribbon-print-bridge-root",
+  "version": "11.6.0",
+  "scripts": {
+    "dev": "start /b node bridge_server.js & cd ribbon-web && npm run dev",
+    "bridge": "node bridge_server.js",
+    "web": "cd ribbon-web && npm run dev"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}

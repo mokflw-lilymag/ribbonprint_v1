@@ -857,8 +857,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = '11.0';
-const PORT = 8000;
+const REQUIRED_BRIDGE_VERSION = '15.6';
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -1571,13 +1570,60 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           )}
         </div>
 
-        {/* Specs */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-slate-300 font-semibold mb-2 border-b border-slate-700 pb-2">
-            <Settings size={16} /> 하드웨어 규격
+        {/* 1. 출력 프린터 / 브릿지 상태 (최상단) */}
+        <div className="pt-2">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">출력 프린터</label>
+            <div className="flex items-center gap-1.5">
+              <div className={cn("w-2 h-2 rounded-full animate-pulse", printers.length > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500")} />
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Bridge Engine v{bridgeVersion || '?.?'}</span>
+            </div>
           </div>
+          <div className="flex gap-2">
+            <select 
+              value={selectedPrinter} 
+              onChange={e => setSelectedPrinter(e.target.value)}
+              className="flex-1 p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2 ring-blue-500/50"
+            >
+              {printers.length === 0 && <option value="">☁️ 매장 기본 프린터로 원격 전송</option>}
+              {printers.map((p: any) => (
+                <option key={p.name} value={p.name}>
+                  {p.brand === 'epson' ? '🟢' : p.brand === 'hp' ? '🔵' : '⚪'} {p.name} {p.status === 'Ready' ? '✅' : '⚠️'}
+                </option>
+              ))}
+            </select>
+            <button 
+              onClick={() => {
+                fetch('http://127.0.0.1:8000/api/printers')
+                  .then(res => res.json())
+                  .then(res => res.status === 'success' && setPrinters(res.data));
+              }}
+              title="프린터 목록 갱신"
+              className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition"
+            >
+              <RotateCw size={14} className={isPrinting ? "animate-spin" : ""} />
+            </button>
+          </div>
+          {printers.length > 0 && (() => {
+            const selected = printers.find((p: any) => p.name === selectedPrinter);
+            if (!selected) return null;
+            const engineColor = selected.brand === 'epson' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+              : selected.brand === 'hp' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+              : 'bg-slate-500/15 text-slate-400 border-slate-500/30';
+            return (
+              <div className={`mt-1.5 px-2 py-1 rounded text-[10px] font-medium text-center border ${engineColor}`}>
+                🔧 {selected.engine || 'GDI Variable Height Engine'}
+              </div>
+            );
+          })()}
+        </div>
+
+        <div className="h-px bg-slate-700/50 my-2" />
+
+        {/* 2. 하드웨어 규격 (프리셋, 폭, 길이) */}
+        <div className="space-y-4">
           <div>
-            <label className="text-xs text-slate-400 block mb-1">프리셋</label>
+            <label className="text-xs text-slate-400 block mb-1 font-bold">리본 프리셋</label>
             <select 
               value={ribbonType} 
               onChange={e => {
@@ -1599,426 +1645,247 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 block mb-1">폭 (mm)</label>
-              <input type="number" value={width} onChange={e => setWidth(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono" />
+              <label className="text-[10px] text-slate-500 block mb-1 uppercase tracking-tighter">폭 (Width mm)</label>
+              <input type="number" value={width} onChange={e => setWidth(Number(e.target.value))} className="w-full p-2.5 rounded-lg text-sm text-center font-bold font-mono bg-slate-900 border border-slate-700" />
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">길이 (mm)</label>
-              <input type="number" value={length} onChange={e => setLength(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono" />
+              <label className="text-[10px] text-slate-500 block mb-1 uppercase tracking-tighter">길이 (Length mm)</label>
+              <input type="number" value={length} onChange={e => setLength(Number(e.target.value))} className="w-full p-2.5 rounded-lg text-sm text-center font-bold font-mono bg-slate-900 border border-slate-700" />
             </div>
           </div>
-          
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">인쇄 대상 / 용지</label>
-            <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-3 gap-2">
-                 <button 
-                  onClick={() => setPrintTarget('both')}
-                  className={cn("p-2 rounded-lg text-xs transition", printTarget === 'both' ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
-                 >양쪽 모두</button>
-                 <button 
-                  onClick={() => setPrintTarget('left')}
-                  className={cn("p-2 rounded-lg text-xs transition", printTarget === 'left' ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
-                 >경조사</button>
-                 <button 
-                  onClick={() => setPrintTarget('right')}
-                  className={cn("p-2 rounded-lg text-xs transition", printTarget === 'right' ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
-                 >보내는이</button>
-              </div>
+        </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                 {mediaType === 'roll' ? (
-                   <select 
-                     value={cuttingMargin} 
-                     onChange={e => setCuttingMargin(Number(e.target.value))}
-                     className="p-2 rounded-lg text-xs bg-slate-800 border-slate-700 text-white focus:ring-1"
-                   >
-                     {[1,2,3,4,5,6,7,8,9,10].map(cm => (
-                       <option key={cm} value={cm * 10}>✂️ 커팅 {cm}cm</option>
-                     ))}
-                   </select>
-                 ) : (
-                   <div className="p-2 rounded-lg text-xs bg-slate-900/50 text-slate-500 flex items-center justify-center italic">커팅 불필요</div>
-                 )}
-                 <select 
-                   value={mediaType} 
-                   onChange={e => setMediaType(e.target.value as any)}
-                   className="p-2 rounded-lg text-xs bg-slate-800 border-slate-700 text-white outline-none focus:ring-1"
-                 >
-                   <option value="roll">🔄 롤 리본</option>
-                   <option value="cut">📄 컷 리본</option>
-                 </select>
-                 <select 
-                   value={printQuality} 
-                   onChange={e => setPrintQuality(e.target.value as any)}
-                   className="p-2 rounded-lg text-xs bg-slate-800 border-slate-700 text-white outline-none focus:ring-1"
-                 >
-                   <option value="fast">⚡ 고속 인쇄</option>
-                   <option value="high">💎 고급(저속)</option>
-                 </select>
-              </div>
+        <div className="h-px bg-slate-700/50 my-2" />
+
+        {/* 3. 상단 하단 레이스 */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-1 font-bold">상단여백</label>
+            <input type="number" value={marginTop} onChange={e => setMarginTop(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono bg-slate-900 border border-slate-700" title="헤드 시작점부터 글자까지 (mm)" />
+          </div>
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-1 font-bold">하단여백</label>
+            <input type="number" value={marginBottom} onChange={e => setMarginBottom(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono bg-slate-900 border border-slate-700" title="글자 끝부터 다음 용지까지 (mm)" />
+          </div>
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-1 font-bold">양쪽레이스</label>
+            <input type="number" value={lace} onChange={e => setLace(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono bg-slate-900 border border-slate-700" title="리본 양 끝 여백 (mm)" />
+          </div>
+        </div>
+
+        {/* 4. 양쪽 보정 (M) */}
+        <div className="pt-1">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-slate-400 font-bold flex items-center gap-1">
+              ↔️ 수평(좌우) 보정 <span className="text-[10px] text-slate-500 uppercase font-normal">(Micro-Adjustment)</span>
+            </label>
+            <span className={cn("text-xs font-mono font-bold", marginOffset === 0 ? "text-slate-500" : "text-blue-400")}>
+              {marginOffset > 0 ? `+${marginOffset}` : marginOffset}mm
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-500">L</span>
+            <input 
+              type="range" 
+              min="-20" max="20" step="0.5" 
+              value={marginOffset}
+              onChange={e => setMarginOffset(Number(e.target.value))}
+              className="flex-1 accent-blue-500"
+            />
+            <span className="text-[10px] text-slate-500">R</span>
+          </div>
+        </div>
+
+        <div className="h-px bg-slate-700/50 my-2" />
+
+        {/* 5. 인쇄 대상 & 용지 옵션 (커팅, 롤리본, 고속) */}
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-slate-400 block mb-2 font-bold uppercase">인쇄 대상</label>
+            <div className="grid grid-cols-3 gap-2">
+               <button 
+                onClick={() => setPrintTarget('both')}
+                className={cn("p-2 rounded-lg text-xs font-bold transition", printTarget === 'both' ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
+               >양쪽 모두</button>
+               <button 
+                onClick={() => setPrintTarget('left')}
+                className={cn("p-2 rounded-lg text-xs font-bold transition", printTarget === 'left' ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
+               >경조사어</button>
+               <button 
+                onClick={() => setPrintTarget('right')}
+                className={cn("p-2 rounded-lg text-xs font-bold transition", printTarget === 'right' ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
+               >보내는이</button>
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-slate-400">출력 프린터</label>
-              <div className="flex items-center gap-1.5">
-                <div className={cn("w-2 h-2 rounded-full animate-pulse", printers.length > 0 ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500")} />
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tighter">Bridge v6.1</span>
-              </div>
+          <div className="grid grid-cols-3 gap-2">
+             <select 
+               value={mediaType} 
+               onChange={e => setMediaType(e.target.value as any)}
+               className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-slate-200 outline-none focus:ring-1"
+             >
+               <option value="roll">🔄 롤 리본</option>
+               <option value="cut">📄 컷 리본</option>
+             </select>
+             <select 
+               value={printQuality} 
+               onChange={e => setPrintQuality(e.target.value as any)}
+               className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-slate-200 outline-none focus:ring-1"
+             >
+               <option value="fast">⚡ 고속 인쇄</option>
+               <option value="high">💎 고급(저속)</option>
+             </select>
+             {mediaType === 'roll' ? (
+               <select 
+                 value={cuttingMargin} 
+                 onChange={e => setCuttingMargin(Number(e.target.value))}
+                 className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-blue-400 focus:ring-1"
+               >
+                 {[1,2,3,4,5,6,7,8,9,10].map(cm => (
+                   <option key={cm} value={cm * 10}>✂️ {cm}cm 커팅</option>
+                 ))}
+               </select>
+             ) : (
+               <div className="p-2 rounded-lg text-xs bg-slate-900/50 text-slate-500 flex items-center justify-center italic">커팅 NO</div>
+             )}
+          </div>
+        </div>
+
+        <div className="h-px bg-slate-700/50 my-2" />
+
+        {/* 6. 좌측 리본 (경조사) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-slate-300 font-semibold mb-1 border-b border-slate-700/50 pb-2">
+            <div className="flex items-center gap-2"><Type size={16} className="text-blue-400" /> 좌측 리본 (경조사)</div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => handleRotateAll('left')} className="hover:bg-slate-700 p-1 rounded text-slate-400 hover:text-white" title="90도 회전"><RotateCw size={14} /></button>
+              <button onClick={() => setActiveSide('left')} className={cn("text-[10px] px-2 py-0.5 rounded font-bold ml-1", activeSide === 'left' ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-400")}>ACTIVE</button>
             </div>
-            <div className="flex gap-2">
-              <select 
-                value={selectedPrinter} 
-                onChange={e => setSelectedPrinter(e.target.value)}
-                className="flex-1 p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2"
-              >
-                {printers.length === 0 && <option value="">☁️ 매장 기본 프린터로 원격 전송</option>}
-                {printers.map((p: any) => (
-                  <option key={p.name} value={p.name}>
-                    {p.brand === 'epson' ? '🟢' : p.brand === 'hp' ? '🔵' : '⚪'} {p.name} {p.status === 'Ready' ? '✅' : '⚠️'}
-                  </option>
+          </div>
+          <input 
+            type="text" value={leftText} 
+            onChange={e => setLeftText(e.target.value)} onFocus={() => setActiveSide('left')}
+            className="w-full p-2.5 rounded-xl text-sm font-bold bg-slate-850 border border-slate-700 text-white focus:ring-2 ring-blue-500/50 outline-none" placeholder="내용 입력"
+          />
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-blue-300">폰트 마법사</span>
+              <div className="flex gap-1">
+                {(['ko', 'hj', 'en', 'sym'] as const).map(type => (
+                  <button key={type} onClick={() => setFontWizardMode(type)} className={cn("text-[10px] px-1.5 py-0.5 rounded", fontWizardMode === type ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-400")}>
+                    {type === 'ko' ? '한' : type === 'hj' ? '漢' : type === 'en' ? 'A' : '★'}
+                  </button>
                 ))}
-              </select>
-              <button 
-                onClick={() => {
-                  fetch('http://127.0.0.1:8000/api/printers')
-                    .then(res => res.json())
-                    .then(res => res.status === 'success' && setPrinters(res.data));
-                }}
-                title="목록 갱신"
-                className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition"
-              >
-                <RotateCw size={14} className={isPrinting ? "animate-spin" : ""} />
-              </button>
+              </div>
             </div>
-            {/* Engine Badge */}
-            {printers.length > 0 && (() => {
-              const selected = printers.find((p: any) => p.name === selectedPrinter);
-              if (!selected) return null;
-              const engineColor = selected.brand === 'epson' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                : selected.brand === 'hp' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                : 'bg-slate-500/15 text-slate-400 border-slate-500/30';
-              return (
-                <div className={`mt-1.5 px-2 py-1 rounded text-[10px] font-medium text-center border ${engineColor}`}>
-                  🔧 {selected.engine || 'GDI Fallback'}
-                </div>
-              );
-            })()}
+            <FontSelector value={leftFontConfig[fontWizardMode]} onChange={val => setLeftFontConfig(prev => ({ ...prev, [fontWizardMode]: val }))} mode={fontWizardMode} fonts={availableFonts} />
+            <div className="grid grid-cols-2 gap-2">
+               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">가로%</span>
+                  <input type="number" value={leftRatioX} onChange={e => setLeftRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+               </div>
+               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">세로%</span>
+                  <input type="number" value={leftRatioY} onChange={e => setLeftRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+               </div>
+            </div>
           </div>
-          <div className="pt-2 border-t border-slate-700/50">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-slate-400 font-medium flex items-center gap-1">
-                ↔️ 좌우 보정(M) <span className="text-[10px] text-slate-500">(±2mm)</span>
-              </label>
-              <span className={cn("text-xs font-bold", marginOffset === 0 ? "text-slate-500" : "text-blue-400")}>
-                {marginOffset > 0 ? `+${marginOffset}` : marginOffset}mm
-              </span>
+        </div>
+
+        {/* 7. 우측 리본 (보내는이) */}
+        <div className="space-y-2 mt-4">
+          <div className="flex items-center justify-between text-slate-300 font-semibold mb-1 border-b border-slate-700/50 pb-2">
+            <div className="flex items-center gap-2"><Type size={16} className="text-emerald-400" /> 우측 리본 (보내는이)</div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => handleRotateAll('right')} className="hover:bg-slate-700 p-1 rounded text-slate-400 hover:text-white" title="90도 회전"><RotateCw size={14} /></button>
+              <button onClick={() => setActiveSide('right')} className={cn("text-[10px] px-2 py-0.5 rounded font-bold ml-1", activeSide === 'right' ? "bg-emerald-600 text-white" : "bg-slate-700 text-slate-400")}>ACTIVE</button>
             </div>
+          </div>
+          <input 
+            type="text" value={rightText} 
+            onChange={e => setRightText(e.target.value)} onFocus={() => setActiveSide('right')}
+            className="w-full p-2.5 rounded-xl text-sm font-bold bg-slate-850 border border-slate-700 text-white focus:ring-2 ring-emerald-500/50 outline-none" placeholder="내용 입력"
+          />
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-3">
+             <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-emerald-300">폰트 마법사</span>
+              <div className="flex gap-1">
+                {(['ko', 'hj', 'en', 'sym'] as const).map(type => (
+                  <button key={type} onClick={() => setFontWizardModeRight(type)} className={cn("text-[10px] px-1.5 py-0.5 rounded", fontWizardModeRight === type ? "bg-emerald-600 text-white" : "bg-slate-700 text-slate-400")}>
+                    {type === 'ko' ? '한' : type === 'hj' ? '漢' : type === 'en' ? 'A' : '★'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <FontSelector value={rightFontConfig[fontWizardModeRight]} onChange={val => setRightFontConfig(prev => ({ ...prev, [fontWizardModeRight]: val }))} mode={fontWizardModeRight} fonts={availableFonts} />
+            <div className="grid grid-cols-2 gap-2">
+               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">가로%</span>
+                  <input type="number" value={rightRatioX} onChange={e => setRightRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+               </div>
+               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">세로%</span>
+                  <input type="number" value={rightRatioY} onChange={e => setRightRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-px bg-slate-700/50 my-2" />
+
+        {/* 8. 매장 로고 */}
+        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">🏪 내 점포 로고</label>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-500">L</span>
-              <input 
-                type="range" 
-                min="-20" max="20" step="0.5" 
-                value={marginOffset}
-                onChange={e => setMarginOffset(Number(e.target.value))}
-                className="flex-1 accent-blue-500"
-              />
-              <span className="text-[10px] text-slate-500">R</span>
-            </div>
-          </div>
-          <div className="pt-2 border-t border-slate-700/50">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-slate-400 font-medium flex items-center gap-1">
-                🏪 매장 로고 <span className="text-[10px] text-slate-500">(하단 여백 중앙)</span>
+              {shopLogo && <button onClick={() => { setShopLogo(null); setPrintLogo(false); }} className="text-[10px] text-red-500 font-bold hover:text-red-400">삭제</button>}
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
+                <div className="w-7 h-4 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full"></div>
               </label>
-              <div className="flex items-center gap-2">
-                {shopLogo && (
-                  <button 
-                    onClick={() => {
-                        setShopLogo(null);
-                        setPrintLogo(false);
-                        if (session?.user) supabase.auth.updateUser({ data: { shop_logo: null } });
-                    }} 
-                    className="text-[10px] text-red-500 font-bold hover:text-red-400"
-                  >
-                    삭제
-                  </button>
-                )}
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
-                  <div className="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-            </div>
-            
-            {!shopLogo ? (
-              <label className="flex items-center justify-center w-full p-2 mt-1 border border-dashed border-slate-600 rounded-lg cursor-pointer hover:bg-slate-800 transition">
-                <span className="text-xs text-slate-400 flex items-center gap-2"><Upload size={14}/> 로고 이미지 등록 (PNG)</span>
-                <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleLogoUpload} />
-              </label>
-            ) : (
-                <div className="flex justify-center mt-1 p-2 bg-slate-800 rounded-lg">
-                    <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain bg-white rounded px-2" />
-                </div>
-            )}
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">상단</label>
-              <input type="number" value={marginTop} onChange={e => setMarginTop(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">하단</label>
-              <input type="number" value={marginBottom} onChange={e => setMarginBottom(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">레이스</label>
-              <input type="number" value={lace} onChange={e => setLace(Number(e.target.value))} className="w-full p-2 rounded-lg text-sm text-center font-mono" />
             </div>
           </div>
+          {!shopLogo ? (
+            <label className="flex items-center justify-center w-full p-3 border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:bg-slate-900 transition text-slate-500 hover:text-slate-300">
+              <span className="text-xs flex flex-col items-center gap-1"><Upload size={18}/> 로고 등록</span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+            </label>
+          ) : (
+             <div className="p-2 bg-white rounded-lg flex justify-center">
+               <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain" />
+             </div>
+          )}
         </div>
 
-        {/* Left Ribbon Detail */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-slate-300 font-semibold mb-1 border-b border-slate-700 pb-2">
-            <div className="flex items-center gap-2"><Type size={16} /> 좌측 리본 (경조사)</div>
-            <div className="flex items-center gap-1">
-              <button 
-                title="전체 90도 회전"
-                onClick={() => handleRotateAll('left')} 
-                className="hover:bg-slate-700 p-1 rounded text-slate-400 hover:text-white transition-colors"
-              >
-                <RotateCw size={14} />
-              </button>
-              <button 
-                title="회전 초기화"
-                onClick={() => handleResetRotation('left')} 
-                className="hover:bg-slate-700 p-1 rounded text-slate-400 hover:text-white transition-colors"
-              >
-                <Undo2 size={14} />
-              </button>
-              <button 
-                onClick={() => setActiveSide('left')}
-                className={cn("text-[10px] px-2 py-0.5 rounded font-bold transition-all ml-1", activeSide === 'left' ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-400")}
-              >ACTIVE</button>
-            </div>
-          </div>
-          <input 
-            type="text"
-            value={leftText} 
-            onChange={e => setLeftText(e.target.value)}
-            onFocus={() => setActiveSide('left')}
-            className="w-full p-2 rounded-lg text-sm leading-tight focus:ring-2 bg-slate-800 border-slate-700 text-white outline-none"
-            placeholder="경조사 입력"
-          />
-          <div className="flex flex-col gap-3 p-3 bg-slate-800/80 rounded-xl border border-slate-700">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-blue-400">🧙 폰트 마법사</span>
-              <div className="flex gap-1 overflow-x-auto">
-                {(['ko', 'hj', 'en', 'sym'] as const).map(type => (
-                  <button 
-                    key={type}
-                    onClick={() => setFontWizardMode(type)}
-                    className={cn(
-                      "text-[10px] px-2 py-1 rounded transition-all whitespace-nowrap",
-                      fontWizardMode === type ? "bg-blue-600 text-white shadow-lg" : "bg-slate-700 text-slate-400 hover:text-slate-200"
-                    )}
-                  >
-                    {type === 'ko' ? '한글' : type === 'hj' ? '한자' : type === 'en' ? '영/수' : '기호'}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="flex gap-2 items-center w-full">
-              <div className="flex-1 w-full relative">
-                <FontSelector 
-                  value={leftFontConfig[fontWizardMode]} 
-                  onChange={val => setLeftFontConfig(prev => ({ ...prev, [fontWizardMode]: val }))} 
-                  mode={fontWizardMode} 
-                  fonts={availableFonts}
-                />
-              </div>
-              <button 
-                 onClick={() => setIsFontManagerOpen(true)}
-                 title="내 폰트 추가 및 관리하기"
-                 className="bg-slate-900 border border-slate-700 rounded-lg w-10 flex shrink-0 items-center justify-center hover:bg-slate-700 transition"
-                 style={{ height: '38px' }}
-              >
-                 <Wrench className="w-4 h-4 text-slate-400" />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                 <span className="bg-slate-700 text-[10px] text-slate-300 px-2 flex items-center justify-center shrink-0 w-12">가로%</span>
-                 <input type="number" value={leftRatioX} onChange={e => setLeftRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent outline-none text-white" />
-              </div>
-              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                 <span className="bg-slate-700 text-[10px] text-slate-300 px-2 flex items-center justify-center shrink-0 w-12">세로%</span>
-                 <input type="number" value={leftRatioY} onChange={e => setLeftRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent outline-none text-white" />
-              </div>
-            </div>
-            
-            <div className="mt-1">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] text-slate-300">자간 (0=자동)</span>
-                <span className="text-[10px] font-mono text-blue-400">{leftSpacing === 0 ? 'Auto' : `${leftSpacing}%`}</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" max="100" step="5"
-                value={leftSpacing} 
-                onChange={e => setLeftSpacing(Number(e.target.value))} 
-                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" 
-              />
-            </div>
-          </div>
-        </div>
+        <div className="h-px bg-slate-700/50 my-2" />
 
-        {/* Right Ribbon Detail */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-slate-300 font-semibold mb-1 border-b border-slate-700 pb-2">
-            <div className="flex items-center gap-2"><Type size={16} /> 우측 리본 (보내는이)</div>
-            <div className="flex items-center gap-1">
-              <button 
-                title="전체 90도 회전"
-                onClick={() => handleRotateAll('right')} 
-                className="hover:bg-slate-700 p-1 rounded text-slate-400 hover:text-white transition-colors"
-              >
-                <RotateCw size={14} />
-              </button>
-              <button 
-                title="회전 초기화"
-                onClick={() => handleResetRotation('right')} 
-                className="hover:bg-slate-700 p-1 rounded text-slate-400 hover:text-white transition-colors"
-              >
-                <Undo2 size={14} />
-              </button>
-              <button 
-                onClick={() => setActiveSide('right')}
-                className={cn("text-[10px] px-2 py-0.5 rounded font-bold transition-all ml-1", activeSide === 'right' ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-400")}
-              >ACTIVE</button>
-            </div>
-          </div>
-          <input 
-            type="text"
-            value={rightText} 
-            onChange={e => setRightText(e.target.value)}
-            onFocus={() => setActiveSide('right')}
-            className="w-full p-2 rounded-lg text-sm leading-tight focus:ring-2 bg-slate-800 border-slate-700 text-white outline-none"
-            placeholder="보내는이 입력"
-          />
-          <div className="flex flex-col gap-3 p-3 bg-slate-800/80 rounded-xl border border-slate-700">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-blue-400">🧙 폰트 마법사</span>
-              <div className="flex gap-1 overflow-x-auto">
-                {(['ko', 'hj', 'en', 'sym'] as const).map(type => (
-                  <button 
-                    key={type}
-                    onClick={() => setFontWizardModeRight(type)}
-                    className={cn(
-                      "text-[10px] px-2 py-1 rounded transition-all whitespace-nowrap",
-                      fontWizardModeRight === type ? "bg-blue-600 text-white shadow-lg" : "bg-slate-700 text-slate-400 hover:text-slate-200"
-                    )}
-                  >
-                    {type === 'ko' ? '한글' : type === 'hj' ? '한자' : type === 'en' ? '영/수' : '기호'}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-2 items-center w-full">
-              <div className="flex-1 w-full relative">
-                <FontSelector 
-                  value={rightFontConfig[fontWizardModeRight]} 
-                  onChange={val => setRightFontConfig(prev => ({ ...prev, [fontWizardModeRight]: val }))} 
-                  mode={fontWizardModeRight} 
-                  fonts={availableFonts}
-                />
-              </div>
-              <button 
-                 onClick={() => setIsFontManagerOpen(true)}
-                 title="내 폰트 추가 및 관리하기"
-                 className="bg-slate-900 border border-slate-700 rounded-lg w-10 flex shrink-0 items-center justify-center hover:bg-slate-700 transition"
-                 style={{ height: '38px' }}
-              >
-                 <Wrench className="w-4 h-4 text-slate-400" />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                 <span className="bg-slate-700 text-[10px] text-slate-300 px-2 flex items-center justify-center shrink-0 w-12">가로%</span>
-                 <input type="number" value={rightRatioX} onChange={e => setRightRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent outline-none text-white" />
-              </div>
-              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                 <span className="bg-slate-700 text-[10px] text-slate-300 px-2 flex items-center justify-center shrink-0 w-12">세로%</span>
-                 <input type="number" value={rightRatioY} onChange={e => setRightRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent outline-none text-white" />
-              </div>
-            </div>
-
-            <div className="mt-1">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] text-slate-300">자간 (0=자동)</span>
-                <span className="text-[10px] font-mono text-blue-400">{rightSpacing === 0 ? 'Auto' : `${rightSpacing}%`}</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" max="100" step="5"
-                value={rightSpacing} 
-                onChange={e => setRightSpacing(Number(e.target.value))} 
-                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" 
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Phrase Selector (경조사어 뱅크) */}
+        {/* 9. 자주 쓰는 문구 */}
         <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
           <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
              <div className="flex items-center gap-2">
-               <h3 className="text-xs font-semibold text-slate-400">자주 쓰는 문구</h3>
-               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="상용구 관리 (DB)">
-                 <SettingsIcon size={14} />
-               </button>
+               <h3 className="text-xs font-bold text-slate-300">자주 쓰는 문구</h3>
+               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400"><SettingsIcon size={14} /></button>
              </div>
-             <select 
-               value={phraseCategory} 
-               onChange={e => setPhraseCategory(Number(e.target.value))}
-               className="bg-slate-900 border border-slate-700 text-[10px] rounded px-2 py-1 outline-none focus:ring-1 ring-blue-500 text-slate-300 max-w-[120px]"
-             >
+             <select value={phraseCategory} onChange={e => setPhraseCategory(Number(e.target.value))} className="bg-slate-900 border border-slate-700 text-[10px] rounded px-2 py-1 text-slate-300 outline-none">
                {phraseCategories.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
              </select>
           </div>
-          <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 select-none">
+          <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
             {phraseCategories[phraseCategory]?.phrases.map((item, idx) => (
-               <button 
-                 key={idx} 
-                 onClick={() => {
-                   if (activeSide === 'left') setLeftText(item.text);
-                   else setRightText(item.text);
-                 }}
-                 className="group bg-slate-900 hover:bg-blue-900/40 border border-slate-700 hover:border-blue-500 rounded p-1.5 transition-all flex flex-col items-center justify-center min-h-[40px] overflow-hidden"
-               >
-                 <span className="text-[11px] font-semibold text-slate-200 mb-0.5 leading-none truncate w-full text-center">{item.text}</span>
-                 <span className="text-[9px] text-slate-500 group-hover:text-blue-300 truncate w-full text-center">{item.desc}</span>
+               <button key={idx} onClick={() => { if (activeSide === 'left') setLeftText(item.text); else setRightText(item.text); }} className="bg-slate-900 hover:bg-blue-900/40 border border-slate-700 hover:border-blue-500 rounded p-2 text-center transition-all group">
+                 <span className="text-[11px] font-bold text-slate-200 block truncate group-hover:text-blue-300">{item.text}</span>
+                 <span className="text-[9px] text-slate-500 truncate">{item.desc}</span>
                </button>
             ))}
           </div>
         </div>
 
-        {/* Symbols Data Bank */}
-        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-          <h3 className="text-xs font-semibold text-slate-400 mb-2">특수기호 (Click to Insert)</h3>
-          <div className="grid grid-cols-6 gap-1.5 select-none">
+        {/* 10. 특수 기호 */}
+        <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 mt-4 mb-10">
+          <h3 className="text-xs font-bold text-slate-300 mb-2">특수 기호</h3>
+          <div className="grid grid-cols-6 gap-1">
             {SYMBOL_BANK.map(sym => (
-               <button 
-                 key={sym} 
-                 onClick={() => insertSymbol(sym)}
-                 className="bg-slate-900 hover:bg-brand border border-slate-700 hover:border-brand rounded py-1.5 text-[11px] transition-colors"
-               >
+               <button key={sym} onClick={() => insertSymbol(sym)} className="bg-slate-900 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 rounded py-1.5 text-xs text-slate-300 hover:text-white transition-colors">
                  {sym}
                </button>
             ))}
@@ -2378,13 +2245,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"></div>
             
             <div className="text-5xl mb-6">🚀</div>
-            <h2 className="text-2xl font-bold text-white mb-2">최신 인쇄 브릿지 설치 권장 [v11.0]</h2>
-            <p className="text-amber-400 font-medium mb-4">새로운 연속 인쇄(리본 로딩 방지) 기능이 출시되었습니다!</p>
+            <h2 className="text-2xl font-bold text-white mb-2">최신 인쇄 브릿지 필수 설치 [v15.6]</h2>
+            <p className="text-amber-400 font-medium mb-4">새로운 고성능 가변 길이 엔진(v15.6)이 출시되었습니다!</p>
             
             <div className="bg-slate-800/50 rounded-2xl p-4 text-left mb-6 border border-slate-700">
               <ul className="text-sm text-slate-300 space-y-2">
-                <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">리본 로딩 방지:</span> 양쪽 인쇄 시 버벅임 없이 즉시 연속 인쇄</li>
-                <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">정밀 멈춤 제어:</span> 여분 출력 후 리본이 즉시 전원 OFF 상태처럼 대기</li>
+                <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">가변 길이 무제한:</span> 에이포(A4) 한계를 넘어선 초장문 리본 인쇄 가능</li>
+                <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">자동 중간선 가이드:</span> 양쪽 인쇄 시 절단 및 접기 위치 자동 표시</li>
                 <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">안정성 향상:</span> 구버전에서 발생하던 통신 오류를 완벽히 해결</li>
               </ul>
             </div>
@@ -2393,11 +2260,11 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
             <div className="flex flex-col gap-3">
               <a 
-                href="/RibbonBridge_Setup_v11.zip" 
+                href="/RibbonBridge_v15_6.zip" 
                 download
                 className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98]"
               >
-                📥 v11.0 최신 브릿지 다운로드 (권장)
+                📥 v15.6 최신 리본 브릿지 다운로드
               </a>
               <button 
                 onClick={() => setShowUpdateModal(false)}
@@ -2495,7 +2362,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
               <button 
                 onClick={() => {
-                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_Setup.zip');
+                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_v15_6.zip');
                   setIsBridgeModalOpen(false);
                 }}
                 className="flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40"
