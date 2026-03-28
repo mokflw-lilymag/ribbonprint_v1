@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { toPng } from 'html-to-image';
-import { LogOut } from 'lucide-react';
 import { 
   Printer, 
   Type,
@@ -16,13 +15,16 @@ import {
   Shield,
   Menu,
   X,
-  Upload
+  Upload,
+  Settings,
+  BookOpen,
+  FolderOpen,
+  LogOut
 } from 'lucide-react';
 import { FontManagerDialog } from './FontManagerDialog';
 import { TemplateManagerDialog } from './TemplateManagerDialog';
 import { PhraseManagerDialog } from './PhraseManagerDialog';
 import { ManualDialog } from './ManualDialog';
-import { FolderOpen, Settings as SettingsIcon, BookOpen } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { type CustomFontInfo, getAllCustomFonts, getHiddenFonts } from './lib/font-store';
 import { useSubscription } from './lib/use-subscription';
@@ -864,7 +866,6 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [showPaywall, setShowPaywall] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
 
   // ─── Bridge Connection Status (Live Polling) ───
   const [bridgeConnected, setBridgeConnected] = useState(false);
@@ -895,7 +896,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         const data = await res.json();
         if (data.status === 'ok') {
           setBridgeConnected(true);
-          setBridgeVersion(data.version || '');
+          const currentVer = data.version || '';
+          setBridgeVersion(currentVer);
+          
+          if (!isVersionOk(currentVer)) {
+            setIsUpdateModalOpen(true);
+          }
+
           // On first connect or reconnect, refresh printer list
           if (!wasConnected) {
             wasConnected = true;
@@ -1377,7 +1384,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   }, [isSidebarOpen]); // Re-fit when side panel toggles
 
   const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const CURRENT_TARGET_VERSION = "11.0";
+  const CURRENT_TARGET_VERSION = "15.6";
 
   useEffect(() => {
     const checkBridge = async () => {
@@ -1831,7 +1838,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
              <div className="flex items-center gap-2">
                <h3 className="text-xs font-bold text-slate-300">자주 쓰는 문구</h3>
-               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400"><SettingsIcon size={14} /></button>
+               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400"><Settings size={14} /></button>
              </div>
              <select value={phraseCategory} onChange={e => setPhraseCategory(Number(e.target.value))} className="bg-slate-900 border border-slate-700 text-[10px] rounded px-2 py-1 text-slate-300 outline-none">
                {phraseCategories.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
@@ -2371,78 +2378,56 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
       <UpdateBridgeModal 
         isOpen={isUpdateModalOpen}
-        isUpdating={isUpdating}
         onClose={() => setIsUpdateModalOpen(false)}
-        onUpdate={async () => {
-          setIsUpdating(true); 
-          try {
-             fetch('http://127.0.0.1:8000/api/update', { method: 'POST' });
-          } catch {
-            // Error intentionally ignored
-          }
-          
-          let attempts = 0;
-          const pollInterval = window.setInterval(async () => {
-             attempts++;
-             try {
-               const check = await fetch('http://127.0.0.1:8000/', { signal: AbortSignal.timeout(1500) });
-               const res = await check.json();
-               if (isVersionOk(res.version)) {
-                  clearInterval(pollInterval);
-                  setIsUpdating(false);
-                  setIsUpdateModalOpen(false);
-                  alert("🌟 브릿지 업데이트가 성공적으로 완료되었습니다!");
-               }
-             } catch (e) {
-               // still loading
-             }
-             if (attempts > 60) {
-                clearInterval(pollInterval);
-                setIsUpdating(false);
-                setIsUpdateModalOpen(false);
-                alert("업데이트 시간이 초과되었습니다. 방화벽 문제일 수 있으니 수동 설치를 권장합니다.");
-             }
-          }, 2000);
+        onDownload={() => {
+          window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_v15_6.zip');
+          setIsUpdateModalOpen(false);
         }}
       />
     </div>
   );
 }
 
-// Update Bridge Handler Component (inside App, or simple helper)
-function UpdateBridgeModal({ isOpen, isUpdating, onClose, onUpdate }: { isOpen: boolean, isUpdating: boolean, onClose: () => void, onUpdate: () => void }) {
+// Update Bridge Handler Component (Manual Download Approach)
+function UpdateBridgeModal({ isOpen, onClose, onDownload }: { isOpen: boolean, onClose: () => void, onDownload: () => void }) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
       <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-yellow-500 to-orange-400"></div>
+        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-500 to-red-400"></div>
         <div className="text-6xl mb-4">🚀</div>
-        <h2 className="text-2xl font-semibold text-white mb-2">
-          {isUpdating ? "업데이트 설치 중..." : "새로운 브릿지 업데이트 발견"}
-        </h2>
-        <p className="text-slate-400 mb-6 text-sm">
-          {isUpdating 
-            ? "새로운 버전을 다운로드하고 백그라운드에서 재시작 중입니다.\n이 창을 닫지 말고 잠시만 기다려주세요 (최대 30초 소요)."
-            : "안정적인 인쇄를 지원하기 위해\n최신 버전의 필수 패치가 필요합니다.\n\n지금 자동으로 업데이트 하시겠습니까?"}
+        <h2 className="text-2xl font-semibold text-white mb-2">최신 브릿지 업데이트 발견</h2>
+        <p className="text-slate-400 mb-6 text-sm leading-relaxed">
+          수동 설치가 가장 빠르고 확실합니다!<br/>
+          아래 버튼을 눌러 <b>최신 브릿지(v15.6)</b>를 다운로드한 후,<br/>
+          압축을 풀고 <span className="text-white font-bold">`[필독]자동설치.bat`</span>를 실행해 주세요.
         </p>
+        
+        <div className="bg-orange-900/20 border border-orange-500/30 rounded p-4 mb-6 text-left">
+          <p className="text-orange-300 text-xs font-semibold mb-2 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+            권장 설치 방법
+          </p>
+          <ol className="text-slate-300 text-[11px] space-y-1.5 leading-tight">
+            <li>1. 아래 버튼을 눌러 ZIP 파일을 다운로드합니다.</li>
+            <li>2. 다운로드 폴더에서 ZIP 파일의 압축을 풉니다.</li>
+            <li>3. <b>`[필독]새_리본프린터_자동설치.bat`</b>를 더블 클릭!</li>
+            <li>4. 웹 앱을 새로고침하면 인쇄 준비 끝! ✨</li>
+          </ol>
+        </div>
+
         <div className="flex gap-3 justify-center">
-          {!isUpdating && (
-            <button 
-              onClick={onClose}
-              className="px-6 py-3 rounded-lg font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
-            >
-              다음에 하기
-            </button>
-          )}
           <button 
-            onClick={onUpdate}
-            disabled={isUpdating}
-            className={cn(
-              "flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold text-white transition-colors shadow-lg",
-              isUpdating ? "bg-slate-600 cursor-not-allowed" : "bg-orange-600 hover:bg-orange-500 shadow-orange-900/40"
-            )}
+            onClick={onClose}
+            className="px-6 py-3 rounded-lg font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
           >
-            {isUpdating ? "기다려주세요..." : "예 (업데이트 시작)"}
+            나중에
+          </button>
+          <button 
+            onClick={onDownload}
+            className="flex-1 px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40 transform active:scale-95"
+          >
+            📥 수동 설치 파일 다운로드
           </button>
         </div>
       </div>
