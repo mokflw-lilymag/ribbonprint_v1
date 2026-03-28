@@ -226,10 +226,14 @@ $pd = New-Object System.Drawing.Printing.PrintDocument
 $pd.PrinterSettings.PrinterName = '${safePrinter}'
 $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 
-# 1. 엡손 M105 전용 배너 규격 설정
+# 1. 엡손 M105용 무제한 사용자 정의 용지 규격 (A4 너비, 가변 높이)
 $widthUnits = [int](210 / 25.4 * 100)
 $totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
-$pd.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
+$customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
+# [핵심] RawKind를 0(Custom)으로 주입하여 드라이버의 A4 강제 회귀를 방지
+$customPaper.RawKind = 0 
+
+$pd.DefaultPageSettings.PaperSize = $customPaper
 $pd.DefaultPageSettings.Landscape = $false
 $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
 
