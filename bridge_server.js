@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-//   RibbonBridge v11.1 — Queue & Monitor Mode (Stable)
-//   GDI Engine v11.1 · Restored Precision Architecture
+//   RibbonBridge v13.5 — Epson M-Series Master
+//   GDI Engine v13.5 · Banner Merging & Absolute Centering(+5mm)
 // ═══════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -11,7 +11,7 @@ const path = require('path');
 const os = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION = '11.0';
+const VERSION = '13.5';
 const PORT = 8000;
 const TMP_DIR = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -42,7 +42,12 @@ app.get('/', (_req, res) => {
   res.json({ 
     status: 'ok', 
     version: VERSION, 
-    engine: 'GDI v11.1 Stable (HardMargin Restore)',
+    engine: 'GDI v14.0 (Single-Page Master | User Calibrated)',
+    features: [
+      'Absolute Center-point Alignment',
+      'Ultra-Banner Continuous Merging',
+      'Zero-Offset Policy (User Calibrated)'
+    ],
     queue_count: printQueue.length,
     uptime: Math.floor(process.uptime())
   });
@@ -199,70 +204,55 @@ async function executePrintJob(job) {
   }
 }
 
-// ─── GDI Engine v11.1 (Stable Banner Mode) ────────────────────
+// ─── GDI Engine v14.0 (User Calibrated) ──────────────────────
 function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0) {
   return new Promise((resolve, reject) => {
-    // images가 단일 경로면 배열로 변환
     const imageList = Array.isArray(images) ? images : [images];
     const safePrinter = printerName.replace(/'/g, "''");
     
-    // mm → 1/100 inch 변환 (PaperSize용)
-    const lengthUnits = Math.round(lengthMM / 25.4 * 100);
-    const canvasWidthUnits = 827; // A4 Fixed (210mm)
+    // 1. 배너 통합 길이 계산 (리본들의 순수 합 + 맨 마지막 절단 여백 1회)
+    const totalLengthMM = (lengthMM * imageList.length) + cuttingMarginMM;
     
-    // 계산 로직 (v11.1 Standard)
-    const imageHeightMM = lengthMM - cuttingMarginMM;
-    const finalX = leftMarginMM - (widthMM / 2);
+    // [원복] 임의 보정 제거: 사용자 앱의 보정 기능과 연동되도록 (중심점 - 폭/2) 순수 수식만 사용
+    const finalX = leftMarginMM - (widthMM / 2); 
+    const safeX = finalX < 0 ? 0 : finalX;
 
-    console.log(`[GDI v11.1 Restore] Job: ${imageList.length} pages, Center=${leftMarginMM}mm, Paper=${lengthMM}mm`);
+    console.log(`[GDI v15.2 Production] Combined Length: ${totalLengthMM}mm (Segments: ${imageList.length}, Offset: ${cuttingMarginMM}mm)`);
+    console.log(`[GDI v15.2 Production] Target X: ${safeX}mm (Pure math: margin - width/2)`);
 
     const psScript = `
 Add-Type -AssemblyName System.Drawing
-
 $pd = New-Object System.Drawing.Printing.PrintDocument
 $pd.PrinterSettings.PrinterName = '${safePrinter}'
 $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 
-# 용지 폭 고정 (A4) 및 여백 0 설정 (불필요한 급지 방지)
-$paperSize = New-Object System.Drawing.Printing.PaperSize("Ribbon-Roll", ${canvasWidthUnits}, ${lengthUnits})
-$pd.DefaultPageSettings.PaperSize = $paperSize
+# 1. 엡손 M105 전용 배너 규격 설정
+$widthUnits = [int](210 / 25.4 * 100)
+$totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
+$pd.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
+$pd.DefaultPageSettings.Landscape = $false
 $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
-$pd.OriginAtMargins = $false
 
-$global:pageIdx = 0
-$global:images = @()
-${imageList.map(img => `$global:images += '${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join('\n')}
+$images = @(${imageList.map(img => `'${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',')})
 
 $pd.Add_PrintPage({
   param($sender, $e)
+  $g = $e.Graphics
+  $g.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
   
-  $currentImgPath = $global:images[$global:pageIdx]
-  if (-not (Test-Path $currentImgPath)) {
-      Write-Error "File not found: $currentImgPath"
-      $e.HasMorePages = $false
-      return
+  $currentY = 0
+  foreach ($path in $images) {
+    if (Test-Path $path) {
+      $img = [System.Drawing.Image]::FromFile($path)
+      # [V15.1 정규] 사용자가 웹 UI에서 맞춘 위치(safeX)에 정확히 출력
+      $destRect = New-Object System.Drawing.RectangleF(${safeX}, $currentY, ${widthMM}, ${lengthMM})
+      $g.DrawImage($img, $destRect)
+      
+      $currentY += ${lengthMM}
+      $img.Dispose()
+    }
   }
-
-  $img = [System.Drawing.Image]::FromFile($currentImgPath)
-  
-  # 페이지 단위를 밀리미터로 변경 (정밀도 향상)
-  $e.Graphics.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
-  
-  # 실제 출력 영역 지정 (v11.1 Center-Point Logic)
-  # 사용자 설정 영점(0점) 기준 좌표를 그대로 사용합니다.
-  $destRect = New-Object System.Drawing.RectangleF(${finalX}, 0, ${widthMM}, ${imageHeightMM})
-  
-  # 품질 설정 (v11.4 Improvements retained)
-  $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-  $e.Graphics.PixelOffsetMode   = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-  $e.Graphics.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-  
-  # 이미지 그리기
-  $e.Graphics.DrawImage($img, $destRect)
-  $img.Dispose()
-
-  $global:pageIdx++
-  $e.HasMorePages = ($global:pageIdx -lt $global:images.Count)
+  $e.HasMorePages = $false
 })
 
 try {
@@ -270,7 +260,7 @@ try {
   $pd.Dispose()
   Write-Output "GDI_SUCCESS"
 } catch {
-  Write-Error $_.Exception.Message
+  Write-Output "GDI_ERROR: $($_.Exception.Message)"
 }
 `;
 
@@ -278,7 +268,11 @@ try {
     let stdout = '';
     let stderr = '';
 
-    ps.stdout.on('data', d => { stdout += d.toString(); });
+    ps.stdout.on('data', d => { 
+      const txt = d.toString();
+      stdout += txt;
+      console.log(`[GDI Server] ${txt.trim()}`);
+    });
     ps.stderr.on('data', d => { stderr += d.toString(); });
 
     ps.on('close', code => {

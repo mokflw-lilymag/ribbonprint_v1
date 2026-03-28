@@ -969,7 +969,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [lace, setLace] = useState(RIBBON_TYPES[0].lace);
   const [marginTop, setMarginTop] = useState(RIBBON_TYPES[0].marginTop);
   const [marginBottom, setMarginBottom] = useState(RIBBON_TYPES[0].marginBottom);
-  const [marginOffset, setMarginOffset] = useState<number>(RIBBON_TYPES[0].marginOffset);
+  const [marginOffset, setMarginOffset] = useState<number>(0); // 사용자 수동 보정값 (기본 0)
 
   // Left Ribbon State
   const [leftText, setLeftText] = useState('祝發展');
@@ -1267,11 +1267,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               printer_name: selectedPrinter,
               images: images,
               width_mm: w,
-              length_mm: h + (mediaType === 'roll' ? cuttingMargin : 0),
+              length_mm: h,
               media_type: mediaType,
               cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
               print_quality: printQuality,
-              margin_offset_mm: marginOffset
+              // [수정] 기점(Base) + 사용자 보정치(Delta)를 합쳐서 절대 좌표로 전달
+              margin_offset_mm: (RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset
             }),
             signal: controller.signal
           });
@@ -1305,9 +1306,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         // [수정] 인쇄 순서 및 회전 반전: 
         // 1. 오른쪽 리본 (경조사어): 가장 먼저 출력, 180도 회전 (뒤집힘)
         // 2. 왼쪽 리본 (보내는이): 그 다음 출력, 회전 없음 (정방향)
+        // [최종 교정] 인쇄 순서 및 참조(Ref) 매핑 정상화
         await sendJob([
-          {ref: separateRightRef, label: '경조사', rotate: true},   // Page 1: Inverted (TOP)
-          {ref: separateLeftRef, label: '보내는이', rotate: false} // Page 2: Upright (BOTTOM)
+          {ref: separateLeftRef, label: '경조사', rotate: true},   // 1번 (Y=0): 경조사어 (화면 왼쪽 리본 / TOP / 180도 회전)
+          {ref: separateRightRef, label: '보내는이', rotate: false} // 2번 (Y=Length): 보내는이 (화면 오른쪽 리본 / BOTTOM / 정방향)
         ], width, length, '양쪽배너통합');
         
         // 작업 추가 후 대기열 열기
@@ -1718,7 +1720,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <span className="text-[10px] text-slate-500">L</span>
               <input 
                 type="range" 
-                min="-2" max="2" step="0.5" 
+                min="-20" max="20" step="0.5" 
                 value={marginOffset}
                 onChange={e => setMarginOffset(Number(e.target.value))}
                 className="flex-1 accent-blue-500"
@@ -2122,12 +2124,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <div className="flex flex-col items-center bg-white shadow-2xl p-4 border-[10px] border-slate-700 rounded-sm">
                 {printTarget === 'left' && (
                   <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
-                    <RibbonCanvas 
-                      text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
-                      width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                      rotatedIds={leftRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
-                    />
+                      <RibbonCanvas 
+                        text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
+                        width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                        rotatedIds={leftRotated} onCharClick={() => {}}
+                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
+                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                        shopLogo={shopLogo} printLogo={printLogo}
+                      />
                   </div>
                 )}
                 {printTarget === 'right' && (
@@ -2136,7 +2140,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
+                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
+                      marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                      shopLogo={shopLogo} printLogo={printLogo}
                     />
                   </div>
                 )}
@@ -2147,7 +2153,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
+                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
+                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                        shopLogo={shopLogo} printLogo={printLogo}
                       />
                     </div>
                     {/* Middle Connection Line */}
@@ -2156,7 +2164,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                       text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                       width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                       rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
+                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
+                      marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                      shopLogo={shopLogo} printLogo={printLogo}
                     />
                   </div>
                 )}
@@ -2167,7 +2177,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
+                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
+                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                        shopLogo={shopLogo} printLogo={printLogo}
                       />
                     </div>
                     <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
@@ -2175,7 +2187,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                         text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                         width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                         rotatedIds={rightRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
+                        scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
+                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                        shopLogo={shopLogo} printLogo={printLogo}
                       />
                     </div>
                   </div>
@@ -2193,14 +2207,18 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
                 width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                 rotatedIds={leftRotated} onCharClick={(id) => toggleRotation(id, 'left')}
-                scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'} marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
+                scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'} 
+                marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                shopLogo={shopLogo} printLogo={printLogo}
                 onClick={() => setActiveSide('left')} side="left"
               />
               <RibbonCanvas 
                 text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
                 width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
                 rotatedIds={rightRotated} onCharClick={(id) => toggleRotation(id, 'right')}
-                scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'} marginOffset={marginOffset} shopLogo={shopLogo} printLogo={printLogo}
+                scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'} 
+                marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+                shopLogo={shopLogo} printLogo={printLogo}
                 onClick={() => setActiveSide('right')} side="right"
               />
             </div>
