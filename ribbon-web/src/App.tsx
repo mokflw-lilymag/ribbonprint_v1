@@ -3,18 +3,15 @@ import { toPng } from 'html-to-image';
 import { LogOut } from 'lucide-react';
 import { 
   Printer, 
-  Settings, 
   Type,
   Maximize2,
   Minimize2,
   RotateCw,
-  Undo2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Search,
   Check,
-  Wrench,
   Eye,
   Shield,
   Menu,
@@ -1438,10 +1435,6 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     else setRightRotated(newRotated);
   };
 
-  const handleResetRotation = (side: 'left'|'right') => {
-    if (side === 'left') setLeftRotated(new Set());
-    else setRightRotated(new Set());
-  };
 
   const currentConfig = {
     ribbonType, length, width, lace, marginTop, marginBottom,
