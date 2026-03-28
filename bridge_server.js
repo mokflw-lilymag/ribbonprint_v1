@@ -1,18 +1,18 @@
 // ═══════════════════════════════════════════════════════════════
-//   RibbonBridge v11.0 — Queue Monitoring & Persistence
-//   GDI · Queue System · Retry/Cancel Support
+//   RibbonBridge v11.1 — Queue & Monitor Mode (Stable)
+//   GDI Engine v11.1 · Restored Precision Architecture
 // ═══════════════════════════════════════════════════════════════
 
 const express = require('express');
-const cors    = require('cors');
+const cors = require('cors');
 const { exec, execSync, spawn } = require('child_process');
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
-const os   = require('os');
+const os = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION = '11.1';
-const PORT    = 8000;
+const VERSION = '11.0';
+const PORT = 8000;
 const TMP_DIR = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
 
@@ -22,16 +22,7 @@ const BASE_DIR = isPkg ? path.dirname(process.execPath) : __dirname;
 // ─── App Setup ─────────────────────────────────────────────────
 const app = express();
 app.use(cors());
-<<<<<<< Updated upstream
-app.use(express.json({ limit: '50mb' }));
-
-// ── 버전 체크 API (자동 업데이트 유도용) ───────────────────────
-app.get('/api/version', (req, res) => {
-  res.json({ status: 'success', version: VERSION });
-});
-=======
 app.use(express.json({ limit: '250mb' }));
->>>>>>> Stashed changes
 
 if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
 
@@ -40,7 +31,7 @@ let printQueue = []; // [{id, status, timestamp, printer, images, width, length,
 
 // ─── Boot Log ──────────────────────────────────────────────────
 console.log('╔══════════════════════════════════════════════════╗');
-console.log(`║      RibbonBridge v${VERSION} — Banner Folding       ║`);
+console.log(`║      RibbonBridge v${VERSION} — Queue & Monitor       ║`);
 console.log('╚══════════════════════════════════════════════════╝');
 console.log(`> Platform : ${os.platform()} ${os.release()}`);
 console.log(`> Temp Dir : ${TMP_DIR}`);
@@ -48,12 +39,23 @@ console.log(`> Temp Dir : ${TMP_DIR}`);
 // ─── Routes ════════════════════════════════════════════════════
 
 app.get('/', (_req, res) => {
-  res.json({ status: 'ok', version: VERSION, queue_count: printQueue.length });
+  res.json({ 
+    status: 'ok', 
+    version: VERSION, 
+    engine: 'GDI v11.1 Stable (HardMargin Restore)',
+    queue_count: printQueue.length,
+    uptime: Math.floor(process.uptime())
+  });
 });
 
 // 페어링
 app.post('/api/pair', (req, res) => {
   res.json({ status: 'ok', version: VERSION, paired: true });
+});
+
+// 버전 체크 API
+app.get('/api/version', (req, res) => {
+  res.json({ status: 'success', version: VERSION });
 });
 
 // 프린터 목록
@@ -63,11 +65,20 @@ app.get('/api/printers', (_req, res) => {
     const raw = execSync(cmd, { timeout: 10000, encoding: 'utf8' });
     let list = JSON.parse(raw || '[]');
     if (!Array.isArray(list)) list = [list];
-    const data = list.filter(p => p.Name).map(p => ({
-      name: p.Name,
-      status: p.PrinterStatus === 0 ? 'Ready' : 'Error/Offline',
-      driver: p.DriverName || ''
-    }));
+    const data = list.filter(p => p.Name).map(p => {
+      let statusStr = 'Ready';
+      if (p.PrinterStatus & 0x00000001) statusStr = 'Paused';
+      else if (p.PrinterStatus & 0x00000002) statusStr = 'Error';
+      else if (p.PrinterStatus & 0x00000008) statusStr = 'Paper Jam';
+      else if (p.PrinterStatus & 0x00000010) statusStr = 'Paper Out';
+      else if (p.PrinterStatus !== 0) statusStr = 'Busy/Other';
+
+      return {
+        name: p.Name,
+        status: statusStr,
+        driver: p.DriverName || ''
+      };
+    });
     return res.json({ status: 'success', data });
   } catch (err) {
     return res.json({ status: 'error', message: err.message });
@@ -78,7 +89,6 @@ app.get('/api/printers', (_req, res) => {
 
 // 1. 대기열 목록 가져오기
 app.get('/api/queue', (_req, res) => {
-  // 전송 시 이미지는 제외하고 메타데이터만 전송
   const list = printQueue.map(q => ({
     id: q.id,
     status: q.status,
@@ -93,58 +103,11 @@ app.get('/api/queue', (_req, res) => {
 
 // 2. 새로운 작업 추가 & 인쇄 시작
 app.post('/api/print_image', async (req, res) => {
-<<<<<<< Updated upstream
-  const { printer_name, image_base64, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0 } = req.body;
-  const jobId = `job_${Date.now()}`;
-  const localPaths = [];
+  const { printer_name, images, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0 } = req.body;
 
-  try {
-    // 이미지 리스트 처리
-    const images = Array.isArray(image_base64) ? image_base64 : [image_base64];
-    
-    for (let i = 0; i < images.length; i++) {
-        const pathStr = path.join(TMP_DIR, `${jobId}_${i}.png`);
-        const rawData = images[i].includes(',') ? images[i].split(',')[1] : images[i];
-        fs.writeFileSync(pathStr, Buffer.from(rawData, 'base64'));
-        localPaths.push(pathStr);
-    }
-
-    console.log(`\n[PRINT] ── Multi-Job ${jobId} ─────────────────────`);
-    console.log(`[PRINT]   Printer : ${printer_name}`);
-    console.log(`[PRINT]   Pages   : ${localPaths.length}`);
-
-    // GDI 엔진 호출 (이미지 경로 배열 전달)
-    const leftMarginMM = parseFloat(margin_offset_mm) || 0;
-    const cuttingMarginMM = parseFloat(cutting_margin_mm) || 0;
-    
-    await printViaGDI(printer_name, localPaths, parseFloat(width_mm), parseFloat(length_mm), leftMarginMM, cuttingMarginMM);
-    
-    console.log(`[PRINT] ✅ Success`);
-    return res.json({ status: 'success' });
-
-  } catch (err) {
-    console.error(`[PRINT] ❌ ${err.message}`);
-    return res.json({ status: 'error', message: err.message });
-  } finally {
-    // 모든 임시파일 삭제
-    localPaths.forEach(p => {
-        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
-    });
+  if (!printer_name || !images) {
+    return res.status(400).json({ status: 'error', message: 'Missing printer_name or images' });
   }
-});
-
-// ─── GDI Engine: Epson M105 배너 최적화 ───────────────────────
-// 핵심 원리:
-//  · .NET System.Drawing 사용하여 이미지를 리본 크기에 맞게 출력
-//  · 종이 크기: A4 폭(210mm=827/100인치) + 리본 길이를 높이로 설정
-//  · DrawImage rect는 픽셀 단위가 아니라 1/100인치 단위 (GDI 기본)
-//  · M105는 세로 방향(landscape=false), 상단부터 급지
-//  · 이미지는 이미 App.tsx에서 180도 회전되어 있음
-// ─── GDI Engine: Epson M105 배너 최적화 ───────────────────────
-function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0) {
-=======
-  const { printer_name, images, width_mm, length_mm, margin_offset_mm } = req.body;
-  if (!printer_name || !images) return res.status(400).json({ status: 'error', message: 'Missing data' });
 
   const jobId = `job_${Date.now()}`;
   const newJob = {
@@ -152,14 +115,15 @@ function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cutti
     status: 'printing',
     timestamp: new Date().toISOString(),
     printer: printer_name,
-    images: images,
+    images: Array.isArray(images) ? images : [images],
     width: width_mm,
     length: length_mm,
-    margin: margin_offset_mm
+    margin: margin_offset_mm,
+    cutting_margin: cutting_margin_mm
   };
 
   printQueue.unshift(newJob);
-  if (printQueue.length > 10) printQueue.pop(); // 최대 10개만 유지
+  if (printQueue.length > 20) printQueue.pop();
 
   // 백그라운드에서 인쇄 실행
   executePrintJob(newJob);
@@ -177,12 +141,17 @@ app.post('/api/queue/retry/:jobId', (req, res) => {
   res.json({ status: 'success' });
 });
 
-// 4. 작업 삭제/취소
+// 4. 대기열 비우기
+app.post('/api/queue/clear', (req, res) => {
+  printQueue = [];
+  res.json({ status: 'success' });
+});
+
+// 5. 작업 삭제/취소
 app.delete('/api/queue/:jobId', (req, res) => {
   const index = printQueue.findIndex(q => q.id === req.params.jobId);
   if (index > -1) {
     printQueue.splice(index, 1);
-    // 윈도우 스풀러 강제 취소 명령 (옵션)
     exec(`powershell "Get-PrintJob -PrinterName '*' | Where-Object { $_.JobDescription -match 'Ribbon' } | Remove-PrintJob"`);
     res.json({ status: 'success' });
   } else {
@@ -192,89 +161,69 @@ app.delete('/api/queue/:jobId', (req, res) => {
 
 // ─── Core Logic: Execute Print Job ─────────────────────────────
 async function executePrintJob(job) {
+  const localPaths = [];
   try {
-    console.log(`[Queue] Starting Job: ${job.id} on ${job.printer}`);
-    await printViaGDI(job.printer, job.images, parseFloat(job.width), parseFloat(job.length), parseFloat(job.margin) || 0);
+    console.log(`[Queue] Starting Job: ${job.id} (Segments: ${job.images.length})`);
+
+    // 1. Save base64 to temp files
+    for (let i = 0; i < job.images.length; i++) {
+      const pathStr = path.join(TMP_DIR, `${job.id}_${i}.png`);
+      const imgData = job.images[i];
+      const rawData = imgData.includes(',') ? imgData.split(',')[1] : imgData;
+      fs.writeFileSync(pathStr, Buffer.from(rawData, 'base64'));
+      localPaths.push(pathStr);
+    }
+
+    // 2. Call GDI Engine
+    const width = parseFloat(job.width);
+    const length = parseFloat(job.length);
+    const margin = parseFloat(job.margin) || 0;
+    const cut = parseFloat(job.cutting_margin) || 0;
+
+    await printViaGDI(job.printer, localPaths, width, length, margin, cut);
+
     job.status = 'completed';
     console.log(`[Queue] Job Completed: ${job.id}`);
+
   } catch (err) {
-    job.status = 'failed';
-    console.error(`[Queue] Job Failed: ${job.id} - ${err.message}`);
+    job.status = 'error';
+    job.error = err.message;
+    console.error(`[Queue] Job ERROR: ${job.id} - ${err.message}`);
+  } finally {
+    // Cleanup Temp Files after short delay
+    setTimeout(() => {
+      localPaths.forEach(p => {
+        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) { }
+      });
+    }, 5000);
   }
 }
 
-// ─── GDI Engine (v10.9 logic preserved) ───────────────────────
-function printViaGDI(printerName, images, widthMM, segmentLengthMM, leftMarginMM) {
->>>>>>> Stashed changes
+// ─── GDI Engine v11.1 (Stable Banner Mode) ────────────────────
+function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0) {
   return new Promise((resolve, reject) => {
     // images가 단일 경로면 배열로 변환
     const imageList = Array.isArray(images) ? images : [images];
     const safePrinter = printerName.replace(/'/g, "''");
-<<<<<<< Updated upstream
     
-    // mm → 1/100 inch 변환
-    const widthUnits  = Math.round(widthMM  / 25.4 * 100);
+    // mm → 1/100 inch 변환 (PaperSize용)
     const lengthUnits = Math.round(lengthMM / 25.4 * 100);
-    const canvasWidthUnits = 827; // A4 Fixed
+    const canvasWidthUnits = 827; // A4 Fixed (210mm)
+    
+    // 계산 로직 (v11.1 Standard)
     const imageHeightMM = lengthMM - cuttingMarginMM;
-=======
-    const segmentLengthUnits = Math.round(segmentLengthMM / 25.4 * 100);
-    const canvasWidthUnits = 827; 
->>>>>>> Stashed changes
     const finalX = leftMarginMM - (widthMM / 2);
-    const totalLengthUnits = segmentLengthUnits * images.length;
 
-    const tmpFiles = [];
-    images.forEach((img, idx) => {
-      const rawData = img.includes(',') ? img.split(',')[1] : img;
-      const tmpFile = path.join(TMP_DIR, `q_seg_${Date.now()}_${idx}.png`);
-      fs.writeFileSync(tmpFile, Buffer.from(rawData, 'base64'));
-      tmpFiles.push(tmpFile);
-    });
-
-    const fileListForPS = tmpFiles.map(f => `'${f.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',');
-
-    console.log(`[GDI V11] Combined Job: ${imageList.length} pages, Center=${leftMarginMM}mm, Paper=${lengthMM}mm`);
+    console.log(`[GDI v11.1 Restore] Job: ${imageList.length} pages, Center=${leftMarginMM}mm, Paper=${lengthMM}mm`);
 
     const psScript = `
 Add-Type -AssemblyName System.Drawing
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-using System.Drawing.Printing;
-public class DevDev {
-    [DllImport("winspool.drv", CharSet=CharSet.Auto, SetLastError=true)]
-    public static extern int DocumentProperties(IntPtr h, IntPtr hp, string n, IntPtr outP, IntPtr inP, int f);
-    [DllImport("winspool.drv", CharSet=CharSet.Auto, SetLastError=true)]
-    public static extern bool OpenPrinter(string n, out IntPtr hp, IntPtr pd);
-    [DllImport("winspool.drv")]
-    public static extern bool ClosePrinter(IntPtr hp);
-    public static void Force(PrinterSettings ps, int w, int l) {
-        try {
-            IntPtr h = ps.GetHdevmode();
-            IntPtr p = Marshal.ReadIntPtr(h);
-            Marshal.WriteInt32(p, 40, Marshal.ReadInt32(p, 40) | 2 | 4 | 8);
-            Marshal.WriteInt16(p, 44, 256);
-            Marshal.WriteInt16(p, 46, (short)l);
-            Marshal.WriteInt16(p, 48, (short)w);
-            IntPtr hp;
-            if (OpenPrinter(ps.PrinterName, out hp, IntPtr.Zero)) {
-                DocumentProperties(IntPtr.Zero, hp, ps.PrinterName, p, p, 10);
-                ClosePrinter(hp);
-            }
-            ps.SetHdevmode(h);
-            Marshal.FreeHGlobal(h);
-        } catch {}
-    }
-}
-"@
 
 $pd = New-Object System.Drawing.Printing.PrintDocument
 $pd.PrinterSettings.PrinterName = '${safePrinter}'
 $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 
-<<<<<<< Updated upstream
-# 용지 폭 고정 및 여백 0 설정 (불필요한 급지 방지)
+# 용지 폭 고정 (A4) 및 여백 0 설정 (불필요한 급지 방지)
 $paperSize = New-Object System.Drawing.Printing.PaperSize("Ribbon-Roll", ${canvasWidthUnits}, ${lengthUnits})
 $pd.DefaultPageSettings.PaperSize = $paperSize
 $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
@@ -288,31 +237,32 @@ $pd.Add_PrintPage({
   param($sender, $e)
   
   $currentImgPath = $global:images[$global:pageIdx]
+  if (-not (Test-Path $currentImgPath)) {
+      Write-Error "File not found: $currentImgPath"
+      $e.HasMorePages = $false
+      return
+  }
+
   $img = [System.Drawing.Image]::FromFile($currentImgPath)
   
+  # 페이지 단위를 밀리미터로 변경 (정밀도 향상)
   $e.Graphics.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
   
-  # 하드웨어 오차 제거 (0점 정렬)
-  $offX = $e.PageSettings.HardMarginX / 100 * 25.4
-  $offY = $e.PageSettings.HardMarginY / 100 * 25.4
-  $e.Graphics.TranslateTransform(-$offX, -$offY)
-
+  # 실제 출력 영역 지정 (v11.1 Center-Point Logic)
+  # 사용자 설정 영점(0점) 기준 좌표를 그대로 사용합니다.
   $destRect = New-Object System.Drawing.RectangleF(${finalX}, 0, ${widthMM}, ${imageHeightMM})
   
-  # 품질 설정
+  # 품질 설정 (v11.4 Improvements retained)
   $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
   $e.Graphics.PixelOffsetMode   = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+  $e.Graphics.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
   
   # 이미지 그리기
   $e.Graphics.DrawImage($img, $destRect)
   $img.Dispose()
 
   $global:pageIdx++
-  if ($global:pageIdx -lt $global:images.Count) {
-    $e.HasMorePages = $true
-  } else {
-    $e.HasMorePages = $false
-  }
+  $e.HasMorePages = ($global:pageIdx -lt $global:images.Count)
 })
 
 try {
@@ -335,52 +285,12 @@ try {
       if (code === 0 && stdout.includes('GDI_SUCCESS')) {
         resolve();
       } else {
-        reject(new Error(stderr.trim() || stdout.trim() || `GDI exit code ${code}`));
+        const errMsg = stderr.trim() || stdout.trim() || `GDI exit code ${code}`;
+        console.error(`[GDI Error] ${errMsg}`);
+        reject(new Error(errMsg));
       }
     });
     ps.on('error', err => reject(new Error(`spawn error: ${err.message}`)));
-=======
-$totalL = ${totalLengthUnits} * 25.4 / 100
-[DevDev]::Force($pd.PrinterSettings, [Math]::Round(${widthMM} * 10), [Math]::Round($totalL * 10))
-
-$ps = New-Object System.Drawing.Printing.PaperSize("Ribbon", ${canvasWidthUnits}, ${totalLengthUnits})
-$ps.RawKind = 256
-$pd.DefaultPageSettings.PaperSize = $ps
-$pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
-
-$imgs = @(${fileListForPS})
-$bitmaps = New-Object System.Collections.Generic.List[System.Drawing.Image]
-foreach($p in $imgs){ $bitmaps.Add([System.Drawing.Image]::FromFile($p)) }
-
-$pd.Add_PrintPage({
-  param($s, $e)
-  $e.Graphics.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
-  $offX = $e.PageSettings.HardMarginX / 100 * 25.4
-  $offY = $e.PageSettings.HardMarginY / 100 * 25.4
-  $e.Graphics.TranslateTransform(-$offX, -$offY)
-  $y = 0
-  $blackPen = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 0.2)
-  foreach($b in $bitmaps){
-    $r = New-Object System.Drawing.RectangleF(${finalX}, $y, ${widthMM}, ${segmentLengthMM})
-    $e.Graphics.DrawImage($b, $r)
-    $y += ${segmentLengthMM}
-    # Draw Fold Line after first segment if multiple
-    if($y -lt ($totalL - 1)){
-        $e.Graphics.DrawLine($blackPen, ${finalX}, $y, (${finalX} + ${widthMM}), $y)
-    }
-  }
-  $blackPen.Dispose()
-  $e.HasMorePages = $false
-})
-try { $pd.Print(); Write-Host "OK" } catch { Write-Error $_ } finally { $bitmaps | %{ $_.Dispose() }; $pd.Dispose() }
-`;
-
-    const psProc = spawn('powershell', ['-NoProfile', '-Command', psScript]);
-    psProc.on('close', code => {
-      tmpFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
-      if (code === 0) resolve(); else reject(new Error('PS Exit '+code));
-    });
->>>>>>> Stashed changes
   });
 }
 
@@ -398,5 +308,5 @@ app.get('/api/fonts/file/:fn', (req, res) => {
 });
 
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n> 🚀 RibbonBridge v${VERSION} (Monitor Mode) at http://localhost:${PORT}\n`);
+  console.log(`\n> 🚀 RibbonBridge v${VERSION} (Stable Mode) at http://localhost:${PORT}\n`);
 });

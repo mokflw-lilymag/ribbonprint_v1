@@ -857,7 +857,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = '11.1';
+const REQUIRED_BRIDGE_VERSION = '11.0';
 const PORT = 8000;
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
@@ -1217,7 +1217,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       }
       
       if (!isVersionOk(bridgeVersion)) {
-        setIsUpdateModalOpen(true);
+        setIsUpdateModalOpen(true); 
         setIsPrinting(false);
         return;
       }
@@ -1300,46 +1300,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         alert("✅ 경조사 인쇄 완료!");
       } else if (printTarget === 'right') {
         await sendJob([{ref: separateRightRef, label: '보내는이'}], width, length, '보내는이');
-        alert("✅ 보내는이 인쇄 완료!");
       } else {
-<<<<<<< Updated upstream
-        // [V11] 양쪽 모두: 리본 로딩 방지를 위해 하나의 작업(Array)으로 묶어서 전송
-        const leftImg = await captureAndRotate(separateLeftRef, '경조사');
-        const rightImg = await captureAndRotate(separateRightRef, '보내는이');
-        
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 90000);
-        
-        const response = await fetch('http://127.0.0.1:8000/api/print_image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            printer_name: selectedPrinter,
-            image_base64: [leftImg, rightImg], // 배열로 전송!
-            width_mm: width,
-            length_mm: length + (mediaType === 'roll' ? cuttingMargin : 0),
-            media_type: mediaType,
-            cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
-            margin_offset_mm: marginOffset
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeout);
-        
-        if (!response.ok) throw new Error("인쇄 서버 응답 실패");
-        alert("✅ 양쪽 연속 인쇄 완료! (리본 로딩 방지 적용)");
-=======
         // 양쪽 모두 (UI 레이아웃 설정과 무관하게 항상 개별 캡처 후 브릿지에서 병합)
-        // Swap orientation based on user feedback:
-        // Top (경조사): Inverted, Bottom (보내는이): Upright
+        // [수정] 인쇄 순서 및 회전 반전: 
+        // 1. 오른쪽 리본 (경조사어): 가장 먼저 출력, 180도 회전 (뒤집힘)
+        // 2. 왼쪽 리본 (보내는이): 그 다음 출력, 회전 없음 (정방향)
         await sendJob([
-          {ref: separateLeftRef, label: '경조사', rotate: true},  // Top: DOWN
-          {ref: separateRightRef, label: '보내는이', rotate: false} // Bottom: UP
+          {ref: separateRightRef, label: '경조사', rotate: true},   // Page 1: Inverted (TOP)
+          {ref: separateLeftRef, label: '보내는이', rotate: false} // Page 2: Upright (BOTTOM)
         ], width, length, '양쪽배너통합');
+        
         // 작업 추가 후 대기열 열기
-        setShowQueue(true);
+        if (typeof setShowQueue === 'function') setShowQueue(true);
         alert("🚀 인쇄 작업이 대기열에 추가되었습니다. 우측 하단 모니터에서 확인하세요.");
->>>>>>> Stashed changes
       }
     } catch (error: any) {
        console.error("[Print] Error:", error);
@@ -1416,11 +1389,11 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
            const data = await res.json();
            if (data.version !== CURRENT_TARGET_VERSION) {
               console.log("[Bridge] Version mismatch:", data.version, "!==", CURRENT_TARGET_VERSION);
-              setShowUpdateModal(true);
+              // setShowUpdateModal(true); // 알림 방지를 위해 주석 처리
            }
         } else {
            // Not OK but reachable - might be very old version
-           setShowUpdateModal(true);
+           // setShowUpdateModal(true); // 알림 방지를 위해 주석 처리
         }
       } catch (e) {
         // Can't connect - either not running or very old bridge
@@ -2525,7 +2498,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         isUpdating={isUpdating}
         onClose={() => setIsUpdateModalOpen(false)}
         onUpdate={async () => {
-          setIsUpdating(true);
+          setIsUpdating(true); 
           try {
              fetch('http://127.0.0.1:8000/api/update', { method: 'POST' });
           } catch {
