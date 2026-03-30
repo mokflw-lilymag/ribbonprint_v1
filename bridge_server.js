@@ -108,7 +108,7 @@ app.get('/api/queue', (_req, res) => {
 
 // 2. 새로운 작업 추가 & 인쇄 시작
 app.post('/api/print_image', async (req, res) => {
-  const { printer_name, images, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0 } = req.body;
+  const { printer_name, images, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0, media_type = 'roll' } = req.body;
 
   if (!printer_name || !images) {
     return res.status(400).json({ status: 'error', message: 'Missing printer_name or images' });
@@ -120,6 +120,7 @@ app.post('/api/print_image', async (req, res) => {
     status: 'printing',
     timestamp: new Date().toISOString(),
     printer: printer_name,
+    mediaType: media_type, // 'roll' | 'cut'
     images: Array.isArray(images) ? images : [images],
     width: width_mm,
     length: length_mm,
@@ -184,11 +185,21 @@ async function executePrintJob(job) {
     const length = parseFloat(job.length);
     const margin = parseFloat(job.margin) || 0;
     const cut = parseFloat(job.cutting_margin) || 0;
+    const mediaType = job.mediaType || 'roll';
 
-    await printViaGDI(job.printer, localPaths, width, length, margin, cut);
+    await printViaGDI(job.printer, localPaths, width, length, margin, cut, mediaType);
 
     job.status = 'completed';
     console.log(`[Queue] Job Completed: ${job.id}`);
+
+    // Auto-cleanup completed job after 2 minutes (120,000 ms)
+    setTimeout(() => {
+      const idx = printQueue.findIndex(q => q.id === job.id && q.status === 'completed');
+      if (idx > -1) {
+        printQueue.splice(idx, 1);
+        console.log(`[Queue] Auto-cleaned completed job: ${job.id}`);
+      }
+    }, 120000);
 
   } catch (err) {
     job.status = 'error';
@@ -204,39 +215,53 @@ async function executePrintJob(job) {
   }
 }
 
-// ─── GDI Engine v14.0 (User Calibrated) ──────────────────────
-function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0) {
+// ─── GDI Engine v16.0 (Roll/Cut Supported & Feed Fixed) ──────────────────────
+function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0, mediaType = 'roll') {
   return new Promise((resolve, reject) => {
     const imageList = Array.isArray(images) ? images : [images];
     const safePrinter = printerName.replace(/'/g, "''");
     
     // 1. 배너 통합 길이 계산 (리본들의 순수 합 + 맨 마지막 절단 여백 1회)
+    // 컷리본이나 물리버튼 에러 완화를 위해, 약간의 버퍼 길이를 확보해줄 수도 있지만 일단 수학적 길이를 유지합니다
     const totalLengthMM = (lengthMM * imageList.length) + cuttingMarginMM;
     
-    // [원복] 임의 보정 제거: 사용자 앱의 보정 기능과 연동되도록 (중심점 - 폭/2) 순수 수식만 사용
+    // 중심점 기준 수식: margin - width/2
     const finalX = leftMarginMM - (widthMM / 2); 
     const safeX = finalX < 0 ? 0 : finalX;
 
-    console.log(`[GDI v15.2 Production] Combined Length: ${totalLengthMM}mm (Segments: ${imageList.length}, Offset: ${cuttingMarginMM}mm)`);
-    console.log(`[GDI v15.2 Production] Target X: ${safeX}mm (Pure math: margin - width/2)`);
+    console.log(`[GDI v15.7->16.0] Mode: ${mediaType.toUpperCase()}, Combined Length: ${totalLengthMM}mm, X Offset: ${safeX}mm`);
 
+    // [Fallback 보장] 기존 로직을 감싼 후, PaperSource만 안전하게 찾아 주입
     const psScript = `
-Add-Type -AssemblyName System.Drawing
-$pd = New-Object System.Drawing.Printing.PrintDocument
-$pd.PrinterSettings.PrinterName = '${safePrinter}'
-$pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
+try {
+  Add-Type -AssemblyName System.Drawing
+  $pd = New-Object System.Drawing.Printing.PrintDocument
+  $pd.PrinterSettings.PrinterName = '${safePrinter}'
+  $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 
-# 1. 엡손 M105용 무제한 사용자 정의 용지 규격 (A4 너비, 가변 높이)
-$widthUnits = [int](210 / 25.4 * 100)
-$totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
-$customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
-$customPaper.RawKind = 256 
+  # 용지 공급장치 '롤(Roll/Continuous)' 자동 탐색 (오류 시 무시하고 기존대로 진행 - Fallback)
+  if ('${mediaType}' -eq 'roll') {
+      foreach ($source in $pd.PrinterSettings.PaperSources) {
+          if ($source.SourceName -match "Roll|Continuous|롤|연속") {
+              $pd.DefaultPageSettings.PaperSource = $source
+              break
+          }
+      }
+  }
 
-$pd.DefaultPageSettings.PaperSize = $customPaper
-$pd.DefaultPageSettings.Landscape = $false
-$pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+  # 1. 무제한 사용자 정의 용지 규격 (너비는 A4 고정 210mm)
+  $widthUnits = [int](210 / 25.4 * 100)
+  $totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
+  $customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
+  $customPaper.RawKind = 256 
 
-$images = @(${imageList.map(img => `'${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',')})
+  $pd.DefaultPageSettings.PaperSize = $customPaper
+  $pd.DefaultPageSettings.Landscape = $false
+  
+  # 프린터가 '여백 0'을 허용하지 않아 여백 확인 대기로 빠지는 현상 방지를 위해 극히 작은 물리적 여백 부여 (1/100인치)
+  $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(1,1,1,1)
+
+  $images = @(${imageList.map(img => `'${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',')})
 
 $pd.Add_PrintPage({
   param($sender, $e)
@@ -266,7 +291,6 @@ $pd.Add_PrintPage({
   $e.HasMorePages = $false
 })
 
-try {
   $pd.Print()
   $pd.Dispose()
   Write-Output "GDI_SUCCESS"

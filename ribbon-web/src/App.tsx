@@ -826,7 +826,7 @@ const RibbonCanvas = ({
         </div>
 
         {/* --- SHOP LOGO INJECTION --- */}
-        {printLogo && shopLogo && (
+        {printLogo && shopLogoBase64 && (
             <div 
               className="absolute left-0 right-0 flex justify-center items-center pointer-events-none"
               style={{
@@ -838,8 +838,7 @@ const RibbonCanvas = ({
               }}
             >
                <img 
-                 crossOrigin="anonymous"
-                 src={shopLogo} 
+                 src={shopLogoBase64} 
                  alt="Logo" 
                  style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 0.5 }} 
                />
@@ -1026,7 +1025,28 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
   // Shop Logo State
   const [shopLogo, setShopLogo] = useState<string | null>(null);
+  const [shopLogoBase64, setShopLogoBase64] = useState<string | null>(null);
   const [printLogo, setPrintLogo] = useState<boolean>(false);
+
+  // Eagerly cache Shop Logo to Base64 to bypass html2canvas CORS bugs
+  useEffect(() => {
+    if (!shopLogo) {
+      setShopLogoBase64(null);
+      return;
+    }
+    if (shopLogo.startsWith('data:')) {
+      setShopLogoBase64(shopLogo);
+      return;
+    }
+    fetch(shopLogo)
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => setShopLogoBase64(reader.result as string);
+        reader.readAsDataURL(blob);
+      })
+      .catch(err => console.warn('Logo pre-fetch failed:', err));
+  }, [shopLogo]);
 
   // Panning State
   const [isDragging, setIsDragging] = useState(false);
@@ -1543,7 +1563,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
             )}
             <button
-              onClick={async () => { await supabase.auth.signOut(); }}
+              onClick={async () => {
+                try { await fetch('http://127.0.0.1:8000/api/queue/clear', { method: 'POST' }); } catch(e){}
+                await supabase.auth.signOut();
+              }}
               className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="로그아웃"
             >
               <LogOut size={18} />
