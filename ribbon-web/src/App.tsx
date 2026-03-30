@@ -1164,7 +1164,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       const fileExt = file.name.split('.').pop();
       const filePath = `shop_logos/${session.user.id}-${Date.now()}.${fileExt}`;
       
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('assets')
         .upload(filePath, file, { upsert: true });
 
