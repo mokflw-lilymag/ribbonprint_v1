@@ -856,7 +856,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = '15.6';
+const REQUIRED_BRIDGE_VERSION = '15.7';
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -873,6 +873,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [showQueue, setShowQueue] = useState(false);
   const bridgeCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [hasDismissedUpdate, setHasDismissedUpdate] = useState(sessionStorage.getItem('bridge_update_dismissed') === 'true');
+  
   const loadPrinters = () => {
     fetch('http://127.0.0.1:8000/api/printers', { signal: AbortSignal.timeout(5000) })
       .then(res => res.json())
@@ -899,7 +901,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           const currentVer = data.version || '';
           setBridgeVersion(currentVer);
           
-          if (!isVersionOk(currentVer)) {
+          if (!isVersionOk(currentVer) && !hasDismissedUpdate) {
             setIsUpdateModalOpen(true);
           }
 
@@ -1155,19 +1157,36 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const base64 = ev.target?.result as string;
-      setShopLogo(base64);
+    if (!file || !session?.user) return;
+
+    try {
+      // 1. Supabase Storage에 업로드 (assets 버킷 사용)
+      const fileExt = file.name.split('.').pop();
+      const filePath = `shop_logos/${session.user.id}-${Date.now()}.${fileExt}`;
+      
+      const { data, error: uploadError } = await supabase.storage
+        .from('assets')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // 2. 퍼블릭 URL 가져오기
+      const { data: { publicUrl } } = supabase.storage
+        .from('assets')
+        .getPublicUrl(filePath);
+
+      // 3. 사용자 메타데이터에 URL만 저장 (Base64 대비 용량 획기적 감소)
+      setShopLogo(publicUrl);
       setPrintLogo(true);
-      if (session?.user) {
-        await supabase.auth.updateUser({
-          data: { shop_logo: base64 }
-        });
-      }
-    };
-    reader.readAsDataURL(file);
+      await supabase.auth.updateUser({
+        data: { shop_logo: publicUrl }
+      });
+      
+      alert("✅ 매장 로고가 안전하게 업로드되었습니다.");
+    } catch (err: any) {
+      console.error('Logo upload error:', err);
+      alert("로고 업로드 오류: " + err.message);
+    }
   };
 
   // ─── 프린트 헬퍼: 이미지 180도 회전 ───
@@ -1219,8 +1238,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         return;
       }
       
-      if (!isVersionOk(bridgeVersion)) {
-        setIsUpdateModalOpen(true); 
+      if (!isVersionOk(bridgeVersion) && !hasDismissedUpdate) {
+        setIsUpdateModalOpen(true);
         setIsPrinting(false);
         return;
       }
@@ -1544,8 +1563,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
                 : 'bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25 animate-pulse'
             }`}
-            onClick={() => { if (!bridgeConnected) setIsBridgeModalOpen(true); else loadPrinters(); }}
-            title={bridgeConnected ? `Bridge v${bridgeVersion} 연결됨 (클릭: 프린터 새로고침)` : '브릿지 미연결 (클릭: 설치 안내)'}
+            onClick={() => { 
+              if (!bridgeConnected) {
+                setIsBridgeModalOpen(true);
+              } else {
+                if (!isVersionOk(bridgeVersion)) {
+                  setIsUpdateModalOpen(true);
+                } else {
+                  alert(`✅ 현재 브릿지 서버(v${bridgeVersion})는 최신 상태입니다.`);
+                  loadPrinters();
+                }
+              }
+            }}
+            title={bridgeConnected ? `Bridge v${bridgeVersion} 연결됨 (클릭: 상태 확인)` : '브릿지 미연결 (클릭: 설치 안내)'}
           >
             {bridgeConnected 
               ? `🟢 인쇄 브릿지 연결됨 (v${bridgeVersion})` 
@@ -2360,7 +2390,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
               <button 
                 onClick={() => {
-                  window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_v15_6.zip');
+                  window.open('https://rzyppdqawepbsjmtjvuo.supabase.co/storage/v1/object/public/assets/guides/RibbonBridge_Setup_v15_7_2.exe');
                   setIsBridgeModalOpen(false);
                 }}
                 className="flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40"
@@ -2378,9 +2408,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
       <UpdateBridgeModal 
         isOpen={isUpdateModalOpen}
-        onClose={() => setIsUpdateModalOpen(false)}
+        onClose={() => {
+          setIsUpdateModalOpen(false);
+          setHasDismissedUpdate(true);
+          sessionStorage.setItem('bridge_update_dismissed', 'true');
+        }}
         onDownload={() => {
-          window.open('https://github.com/mokflw-lilymag/ribbonprint_v1/raw/main/RibbonBridge_v15_6.zip');
+          window.open('https://rzyppdqawepbsjmtjvuo.supabase.co/storage/v1/object/public/assets/guides/RibbonBridge_Setup_v15_7_2.exe');
           setIsUpdateModalOpen(false);
         }}
       />
@@ -2398,21 +2432,20 @@ function UpdateBridgeModal({ isOpen, onClose, onDownload }: { isOpen: boolean, o
         <div className="text-6xl mb-4">🚀</div>
         <h2 className="text-2xl font-semibold text-white mb-2">최신 브릿지 업데이트 발견</h2>
         <p className="text-slate-400 mb-6 text-sm leading-relaxed">
-          수동 설치가 가장 빠르고 확실합니다!<br/>
-          아래 버튼을 눌러 <b>최신 브릿지(v15.6)</b>를 다운로드한 후,<br/>
-          압축을 풀고 <span className="text-white font-bold">`[필독]자동설치.bat`</span>를 실행해 주세요.
+          클릭 한 번으로 완벽하게 새로 설치됩니다!<br/>
+          아래 버튼을 눌러 <b>최신 브릿지 설치파일</b>을 다운로드한 후,<br/>
+          <span className="text-white font-bold">리본프린터_자동설치.exe</span>를 실행해 주세요.
         </p>
         
         <div className="bg-orange-900/20 border border-orange-500/30 rounded p-4 mb-6 text-left">
           <p className="text-orange-300 text-xs font-semibold mb-2 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-            권장 설치 방법
+            단 1초! 세상에서 가장 쉬운 설치 방법
           </p>
           <ol className="text-slate-300 text-[11px] space-y-1.5 leading-tight">
-            <li>1. 아래 버튼을 눌러 ZIP 파일을 다운로드합니다.</li>
-            <li>2. 다운로드 폴더에서 ZIP 파일의 압축을 풉니다.</li>
-            <li>3. <b>`[필독]새_리본프린터_자동설치.bat`</b>를 더블 클릭!</li>
-            <li>4. 웹 앱을 새로고침하면 인쇄 준비 끝! ✨</li>
+            <li>1. 아래 <b>다운로드 버튼</b>을 클릭하여 파일을 받습니다.</li>
+            <li>2. 다운로드된 <b className="text-white">리본프린터_자동설치.exe</b> 더블 클릭!</li>
+            <li>3. (PC 보호 화면시) <b className="text-blue-300">추가 정보</b> &rarr; <b className="text-blue-300">실행</b>을 누르면 끝! ✨</li>
           </ol>
         </div>
 
