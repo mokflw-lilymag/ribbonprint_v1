@@ -1,0 +1,338 @@
+diff --git a/ribbon-web/src/App.tsx b/ribbon-web/src/App.tsx
+index 434de75..a249363 100644
+--- a/ribbon-web/src/App.tsx
++++ b/ribbon-web/src/App.tsx
+@@ -455,13 +455,14 @@ interface RibbonCanvasProps {
+   isPrintMode?: boolean;
+   marginOffset?: number;
+   shopLogo?: string | null;
++  shopLogoBase64?: string | null;
+   printLogo?: boolean;
+ }
+ 
+ const RibbonCanvas = ({ 
+   text, fontConfig, ratioX, ratioY, width, lace, length, marginTop, marginBottom, 
+   rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false, marginOffset: _marginOffset = 0,
+-  shopLogo = null, printLogo = false
++  shopLogo = null, shopLogoBase64 = null, printLogo = false
+ }: RibbonCanvasProps) => {
+   // Parse lines
+   const lines = text.split('\n').filter(l => l.trim() !== '');
+@@ -826,7 +827,7 @@ const RibbonCanvas = ({
+         </div>
+ 
+         {/* --- SHOP LOGO INJECTION --- */}
+-        {printLogo && shopLogoBase64 && (
++        {printLogo && shopLogo && (
+             <div 
+               className="absolute left-0 right-0 flex justify-center items-center pointer-events-none"
+               style={{
+@@ -838,8 +839,9 @@ const RibbonCanvas = ({
+               }}
+             >
+                <img 
+-                 src={shopLogoBase64} 
++                 src={shopLogoBase64 || shopLogo} 
+                  alt="Logo" 
++                 crossOrigin={shopLogoBase64 ? undefined : "anonymous"}
+                  style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 0.5 }} 
+                />
+             </div>
+@@ -1038,14 +1040,17 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+       setShopLogoBase64(shopLogo);
+       return;
+     }
+-    fetch(shopLogo)
++    fetch(shopLogo, { mode: 'cors' })
+       .then(res => res.blob())
+       .then(blob => {
+         const reader = new FileReader();
+         reader.onloadend = () => setShopLogoBase64(reader.result as string);
+         reader.readAsDataURL(blob);
+       })
+-      .catch(err => console.warn('Logo pre-fetch failed:', err));
++      .catch(err => {
++        console.warn('Logo pre-fetch failed, falling back to direct URL:', err);
++        setShopLogoBase64(shopLogo); // Fallback to raw URL
++      });
+   }, [shopLogo]);
+ 
+   // Panning State
+@@ -1295,7 +1300,34 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+           images.push(await captureRef(target.ref, target.label, target.rotate ?? true));
+         }
+ 
+-        console.log(`[Print] 🚀 Sending ${jobLabel}: printer=${selectedPrinter}, segments=${images.length}, margin=${marginOffset}mm, width=${w}mm, length=${h}mm`);
++        console.log(`[Print] 🚀 Sending ${jobLabel}: printer=${selectedPrinter}, mode=${mediaType}, segments=${images.length}, margin=${marginOffset}mm, width=${w}mm, length=${h}mm`);
++
++        // [V16.2] 인쇄 전 리본 상태 확인
++        try {
++          const statusRes = await fetch(`http://127.0.0.1:8000/api/printer/status/${encodeURIComponent(selectedPrinter)}`, { signal: AbortSignal.timeout(3000) });
++          const statusData = await statusRes.json();
++          if (statusData.status === 'success') {
++            const hw = statusData.data;
++            if (hw.status === 'Offline') {
++              throw new Error('🔌 프린터가 꺼져 있습니다. 전원을 확인하세요.');
++            }
++            if (mediaType === 'roll') {
++              if (hw.status === 'Paper Out') {
++                console.log('[Print] 🔄 롤 모드: 리본 없음 → 페이퍼 로딩 필요');
++                // 리본이 없으면 브릿지가 자동 로딩 처리 (PaperSource Roll 설정)
++              } else {
++                console.log('[Print] 🔄 롤 모드: 리본 로딩됨 → 즉시 인쇄');
++              }
++            } else {
++              console.log('[Print] 📄 컷 모드: 매회 새 용지 로딩');
++            }
++          }
++        } catch (statusErr: any) {
++          // 프린터 꺼짐 등의 명시적 에러는 전파
++          if (statusErr.message.includes('프린터가 꺼져')) throw statusErr;
++          // WMI 조회 실패는 무시하고 인쇄 진행
++          console.warn('[Print] 프린터 상태 확인 실패 (무시하고 진행):', statusErr.message);
++        }
+ 
+         // 로컬 브릿지 인쇄 시도
+         try {
+@@ -2048,7 +2080,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                         rotatedIds={leftRotated} onCharClick={() => {}}
+                         scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
+                         marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                        shopLogo={shopLogo} printLogo={printLogo}
++                        shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                       />
+                   </div>
+                 )}
+@@ -2060,7 +2092,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                       rotatedIds={rightRotated} onCharClick={() => {}}
+                       scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
+                       marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                      shopLogo={shopLogo} printLogo={printLogo}
++                      shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                     />
+                   </div>
+                 )}
+@@ -2073,7 +2105,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                         rotatedIds={leftRotated} onCharClick={() => {}}
+                         scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
+                         marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                        shopLogo={shopLogo} printLogo={printLogo}
++                        shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                       />
+                     </div>
+                     {/* Middle Connection Line */}
+@@ -2084,7 +2116,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                       rotatedIds={rightRotated} onCharClick={() => {}}
+                       scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
+                       marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                      shopLogo={shopLogo} printLogo={printLogo}
++                      shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                     />
+                   </div>
+                 )}
+@@ -2097,7 +2129,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                         rotatedIds={leftRotated} onCharClick={() => {}}
+                         scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
+                         marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                        shopLogo={shopLogo} printLogo={printLogo}
++                        shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                       />
+                     </div>
+                     <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
+@@ -2107,7 +2139,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                         rotatedIds={rightRotated} onCharClick={() => {}}
+                         scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
+                         marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                        shopLogo={shopLogo} printLogo={printLogo}
++                        shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                       />
+                     </div>
+                   </div>
+@@ -2127,7 +2159,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                 rotatedIds={leftRotated} onCharClick={(id) => toggleRotation(id, 'left')}
+                 scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'} 
+                 marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                shopLogo={shopLogo} printLogo={printLogo}
++                shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                 onClick={() => setActiveSide('left')} side="left"
+               />
+               <RibbonCanvas 
+@@ -2136,7 +2168,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
+                 rotatedIds={rightRotated} onCharClick={(id) => toggleRotation(id, 'right')}
+                 scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'} 
+                 marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
+-                shopLogo={shopLogo} printLogo={printLogo}
++                shopLogo={shopLogo} shopLogoBase64={shopLogoBase64} printLogo={printLogo}
+                 onClick={() => setActiveSide('right')} side="right"
+               />
+             </div>
+@@ -2548,6 +2580,106 @@ function LoadConfigDialog({ isOpen, onClose, onLoad, userId }: { isOpen: boolean
+     </div>
+   );
+ }
++function PrintJobItem({ job, currentTime, handleRetry, handleDelete }: { job: any, currentTime: number, handleRetry: (id: string) => void, handleDelete: (id: string) => void }) {
++  const [hwStatus, setHwStatus] = useState<any>(null);
++  
++  // 각 작업별 프린터 하드웨어 상태 폴링 (Phase 3)
++  useEffect(() => {
++    if (job.status === 'printing') {
++      const checkHw = async () => {
++        try {
++          const res = await fetch(`http://127.0.0.1:8000/api/printer/status/${encodeURIComponent(job.printer)}`);
++          const result = await res.json();
++          if (result.status === 'success') setHwStatus(result.data);
++        } catch {}
++      };
++      checkHw();
++      const timer = setInterval(checkHw, 5000);
++      return () => clearInterval(timer);
++    }
++  }, [job.status, job.printer]);
++
++  return (
++    <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
++      <div className="flex justify-between items-start mb-2">
++        <div>
++          <div className="flex items-center gap-1.5 mb-0.5">
++            <div className="text-[11px] font-bold text-slate-300 truncate max-w-[120px]">{job.printer}</div>
++            {hwStatus && hwStatus.is_error && (
++              <span className="px-1.5 py-0.5 bg-red-500 text-white text-[8px] font-black rounded-sm animate-pulse">
++                {hwStatus.status.toUpperCase()}
++              </span>
++            )}
++            {job.mediaType === 'cut' && (
++              <span className="px-1 py-0.5 border border-amber-500/50 text-amber-500 text-[8px] font-bold rounded-sm">컷 리본</span>
++            )}
++          </div>
++          <div className="text-[10px] text-slate-500">{job.width}mm x {job.length}mm ({job.segments}단)</div>
++        </div>
++        <div className="flex flex-col items-end gap-1">
++          <div className={cn(
++            "px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap",
++            job.status === 'printing' ? "bg-blue-900/40 text-blue-400" :
++            job.status === 'completed' ? "bg-emerald-900/40 text-emerald-400" :
++            "bg-red-900/40 text-red-400"
++          )}>
++            {job.status === 'printing' ? (hwStatus?.is_error ? '오류 발견' : '인쇄 중') : job.status === 'completed' ? '완료' : '오류'}
++          </div>
++          
++          {/* [Phase 3] 하드웨어 가이드 메시지 */}
++          {job.status === 'printing' && hwStatus?.status === 'Offline' && (
++            <div className="text-[8px] text-red-400 font-bold bg-red-900/20 px-1 py-0.5 rounded">프린터 꺼짐</div>
++          )}
++          
++          {job.status === 'completed' && job.completedAt && (
++            <div className="text-[9px] text-emerald-500/70 font-mono flex items-center gap-1">
++              <span>⏳</span>
++              <span>
++                {(() => {
++                  const remaining = Math.max(0, Math.floor((120000 - (currentTime - job.completedAt)) / 1000));
++                  const mins = Math.floor(remaining / 60);
++                  const secs = remaining % 60;
++                  return `${mins}:${secs.toString().padStart(2, '0')}`;
++                })()}
++              </span>
++            </div>
++          )}
++        </div>
++      </div>
++      
++      {job.status === 'completed' && (
++        <div className="text-[10px] text-slate-500 mb-2 px-1 italic">
++          * 2분 후 이 목록에서 자동으로 사라집니다.
++        </div>
++      )}
++
++      {/* 하드웨어 오류 발생 시 안내 문구 */}
++      {job.status === 'printing' && hwStatus?.is_error && (
++        <div className="mt-1 mb-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-[9px] text-red-300 leading-tight">
++          ⚠️ <b>{hwStatus.status}</b> 상태입니다. 용지나 전원을 확인하세요.
++        </div>
++      )}
++      
++      <div className="flex gap-1 mt-2">
++        {job.status !== 'printing' && (
++          <button 
++            onClick={() => handleRetry(job.id)}
++            className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] rounded transition-colors"
++          >
++            🔄 다시 출력
++          </button>
++        )}
++        <button 
++          onClick={() => handleDelete(job.id)}
++          className="flex-1 py-1.5 bg-slate-700 hover:bg-red-900/40 text-slate-300 text-[10px] rounded transition-colors"
++        >
++          🗑️ 삭제
++        </button>
++      </div>
++    </div>
++  );
++}
++
+ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+   const [queue, setQueue] = useState<any[]>([]);
+   const pollRef = useRef<any>(null);
+@@ -2560,6 +2692,8 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
+     } catch {}
+   };
+ 
++  const [currentTime, setCurrentTime] = useState(Date.now());
++
+   useEffect(() => {
+     if (isOpen) {
+       fetchQueue();
+@@ -2570,6 +2704,12 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
+     return () => { if (pollRef.current) clearInterval(pollRef.current); };
+   }, [isOpen]);
+ 
++  // UI 실시간 타이머를 위한 1초 인터벌
++  useEffect(() => {
++    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
++    return () => clearInterval(timer);
++  }, []);
++
+   const handleRetry = async (id: string) => {
+     try {
+       await fetch(`http://127.0.0.1:8000/api/queue/retry/${id}`, { method: 'POST' });
+@@ -2617,39 +2757,7 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
+             </div>
+           ) : (
+             queue.map(job => (
+-              <div key={job.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+-                <div className="flex justify-between items-start mb-2">
+-                  <div>
+-                    <div className="text-[11px] font-bold text-slate-300">{job.printer}</div>
+-                    <div className="text-[10px] text-slate-500">{job.width}mm x {job.length}mm ({job.segments}단)</div>
+-                  </div>
+-                  <div className={cn(
+-                    "px-2 py-0.5 rounded text-[9px] font-bold",
+-                    job.status === 'printing' ? "bg-blue-900/40 text-blue-400" :
+-                    job.status === 'completed' ? "bg-emerald-900/40 text-emerald-400" :
+-                    "bg-red-900/40 text-red-400"
+-                  )}>
+-                    {job.status === 'printing' ? '인쇄 중' : job.status === 'completed' ? '완료' : '오류'}
+-                  </div>
+-                </div>
+-                
+-                <div className="flex gap-1 mt-2">
+-                  {job.status !== 'printing' && (
+-                    <button 
+-                      onClick={() => handleRetry(job.id)}
+-                      className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] rounded transition-colors"
+-                    >
+-                      🔄 다시 출력
+-                    </button>
+-                  )}
+-                  <button 
+-                    onClick={() => handleDelete(job.id)}
+-                    className="flex-1 py-1.5 bg-slate-700 hover:bg-red-900/40 text-slate-300 text-[10px] rounded transition-colors"
+-                  >
+-                    🗑️ 삭제
+-                  </button>
+-                </div>
+-              </div>
++              <PrintJobItem key={job.id} job={job} currentTime={currentTime} handleRetry={handleRetry} handleDelete={handleDelete} />
+             ))
+           )}
+         </div>

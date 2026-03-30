@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-//   RibbonBridge v13.5 — Epson M-Series Master
-//   GDI Engine v13.5 · Banner Merging & Absolute Centering(+5mm)
+//   RibbonBridge v23.0 — Epson M-Series Engine
+//   GDI Engine v23.0 · Margin-as-Center Absolute Alignment
 // ═══════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -11,7 +11,7 @@ const path = require('path');
 const os = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION = '15.7';
+const VERSION = '23.0';
 const PORT = 8000;
 const TMP_DIR = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -225,11 +225,12 @@ function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cutti
     // 컷리본이나 물리버튼 에러 완화를 위해, 약간의 버퍼 길이를 확보해줄 수도 있지만 일단 수학적 길이를 유지합니다
     const totalLengthMM = (lengthMM * imageList.length) + cuttingMarginMM;
     
-    // 중심점 기준 수식: margin - width/2
-    const finalX = leftMarginMM - (widthMM / 2); 
+    // Coordinate logic: (UserMargin - width/2)
+    // This centers the ribbon image on the printer's fixed physical center guide (specified by userMargin).
+    const finalX = leftMarginMM - (widthMM / 2);
     const safeX = finalX < 0 ? 0 : finalX;
 
-    console.log(`[GDI v15.7->16.0] Mode: ${mediaType.toUpperCase()}, Combined Length: ${totalLengthMM}mm, X Offset: ${safeX}mm`);
+    console.log(`[GDI v${VERSION} Stable] Mode: ${mediaType.toUpperCase()}, Combined Length: ${totalLengthMM}mm, X Offset: ${safeX}mm (Segments: ${imageList.length})`);
 
     // [Fallback 보장] 기존 로직을 감싼 후, PaperSource만 안전하게 찾아 주입
     const psScript = `

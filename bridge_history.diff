@@ -1,0 +1,192 @@
+commit 87e682a16a7ecc2b0f70bff5c3c53b38fe6b3922
+Author: seamlee <lilymagnc@gmail.com>
+Date:   Mon Mar 30 09:52:49 2026 +0900
+
+    feat: Fix logo print rendering, add 2m auto-queue cleanup, and clear queue on logout
+
+diff --git a/bridge_server.js b/bridge_server.js
+index 14bad49..7d3fdec 100644
+--- a/bridge_server.js
++++ b/bridge_server.js
+@@ -108,7 +108,7 @@ app.get('/api/queue', (_req, res) => {
+ 
+ // 2. 새로운 작업 추가 & 인쇄 시작
+ app.post('/api/print_image', async (req, res) => {
+-  const { printer_name, images, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0 } = req.body;
++  const { printer_name, images, width_mm, length_mm, margin_offset_mm, cutting_margin_mm = 0, media_type = 'roll' } = req.body;
+ 
+   if (!printer_name || !images) {
+     return res.status(400).json({ status: 'error', message: 'Missing printer_name or images' });
+@@ -120,6 +120,7 @@ app.post('/api/print_image', async (req, res) => {
+     status: 'printing',
+     timestamp: new Date().toISOString(),
+     printer: printer_name,
++    mediaType: media_type, // 'roll' | 'cut'
+     images: Array.isArray(images) ? images : [images],
+     width: width_mm,
+     length: length_mm,
+@@ -184,12 +185,22 @@ async function executePrintJob(job) {
+     const length = parseFloat(job.length);
+     const margin = parseFloat(job.margin) || 0;
+     const cut = parseFloat(job.cutting_margin) || 0;
++    const mediaType = job.mediaType || 'roll';
+ 
+-    await printViaGDI(job.printer, localPaths, width, length, margin, cut);
++    await printViaGDI(job.printer, localPaths, width, length, margin, cut, mediaType);
+ 
+     job.status = 'completed';
+     console.log(`[Queue] Job Completed: ${job.id}`);
+ 
++    // Auto-cleanup completed job after 2 minutes (120,000 ms)
++    setTimeout(() => {
++      const idx = printQueue.findIndex(q => q.id === job.id && q.status === 'completed');
++      if (idx > -1) {
++        printQueue.splice(idx, 1);
++        console.log(`[Queue] Auto-cleaned completed job: ${job.id}`);
++      }
++    }, 120000);
++
+   } catch (err) {
+     job.status = 'error';
+     job.error = err.message;
+@@ -204,39 +215,53 @@ async function executePrintJob(job) {
+   }
+ }
+ 
+-// ─── GDI Engine v14.0 (User Calibrated) ──────────────────────
+-function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0) {
++// ─── GDI Engine v16.0 (Roll/Cut Supported & Feed Fixed) ──────────────────────
++function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cuttingMarginMM = 0, mediaType = 'roll') {
+   return new Promise((resolve, reject) => {
+     const imageList = Array.isArray(images) ? images : [images];
+     const safePrinter = printerName.replace(/'/g, "''");
+     
+     // 1. 배너 통합 길이 계산 (리본들의 순수 합 + 맨 마지막 절단 여백 1회)
++    // 컷리본이나 물리버튼 에러 완화를 위해, 약간의 버퍼 길이를 확보해줄 수도 있지만 일단 수학적 길이를 유지합니다
+     const totalLengthMM = (lengthMM * imageList.length) + cuttingMarginMM;
+     
+-    // [원복] 임의 보정 제거: 사용자 앱의 보정 기능과 연동되도록 (중심점 - 폭/2) 순수 수식만 사용
++    // 중심점 기준 수식: margin - width/2
+     const finalX = leftMarginMM - (widthMM / 2); 
+     const safeX = finalX < 0 ? 0 : finalX;
+ 
+-    console.log(`[GDI v15.2 Production] Combined Length: ${totalLengthMM}mm (Segments: ${imageList.length}, Offset: ${cuttingMarginMM}mm)`);
+-    console.log(`[GDI v15.2 Production] Target X: ${safeX}mm (Pure math: margin - width/2)`);
++    console.log(`[GDI v15.7->16.0] Mode: ${mediaType.toUpperCase()}, Combined Length: ${totalLengthMM}mm, X Offset: ${safeX}mm`);
+ 
++    // [Fallback 보장] 기존 로직을 감싼 후, PaperSource만 안전하게 찾아 주입
+     const psScript = `
+-Add-Type -AssemblyName System.Drawing
+-$pd = New-Object System.Drawing.Printing.PrintDocument
+-$pd.PrinterSettings.PrinterName = '${safePrinter}'
+-$pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
++try {
++  Add-Type -AssemblyName System.Drawing
++  $pd = New-Object System.Drawing.Printing.PrintDocument
++  $pd.PrinterSettings.PrinterName = '${safePrinter}'
++  $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
++
++  # 용지 공급장치 '롤(Roll/Continuous)' 자동 탐색 (오류 시 무시하고 기존대로 진행 - Fallback)
++  if ('${mediaType}' -eq 'roll') {
++      foreach ($source in $pd.PrinterSettings.PaperSources) {
++          if ($source.SourceName -match "Roll|Continuous|롤|연속") {
++              $pd.DefaultPageSettings.PaperSource = $source
++              break
++          }
++      }
++  }
+ 
+-# 1. 엡손 M105용 무제한 사용자 정의 용지 규격 (A4 너비, 가변 높이)
+-$widthUnits = [int](210 / 25.4 * 100)
+-$totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
+-$customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
+-$customPaper.RawKind = 256 
++  # 1. 무제한 사용자 정의 용지 규격 (너비는 A4 고정 210mm)
++  $widthUnits = [int](210 / 25.4 * 100)
++  $totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
++  $customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
++  $customPaper.RawKind = 256 
+ 
+-$pd.DefaultPageSettings.PaperSize = $customPaper
+-$pd.DefaultPageSettings.Landscape = $false
+-$pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
++  $pd.DefaultPageSettings.PaperSize = $customPaper
++  $pd.DefaultPageSettings.Landscape = $false
++  
++  # 프린터가 '여백 0'을 허용하지 않아 여백 확인 대기로 빠지는 현상 방지를 위해 극히 작은 물리적 여백 부여 (1/100인치)
++  $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(1,1,1,1)
+ 
+-$images = @(${imageList.map(img => `'${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',')})
++  $images = @(${imageList.map(img => `'${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',')})
+ 
+ $pd.Add_PrintPage({
+   param($sender, $e)
+@@ -266,7 +291,6 @@ $pd.Add_PrintPage({
+   $e.HasMorePages = $false
+ })
+ 
+-try {
+   $pd.Print()
+   $pd.Dispose()
+   Write-Output "GDI_SUCCESS"
+
+commit c88846c6d156076a04980ad15aadf3d6d1a8ae1b
+Author: seamlee <lilymagnc@gmail.com>
+Date:   Mon Mar 30 09:06:40 2026 +0900
+
+    update ribbon-web and printer bridge files
+
+diff --git a/bridge_server.js b/bridge_server.js
+index 58b0fc6..14bad49 100644
+--- a/bridge_server.js
++++ b/bridge_server.js
+@@ -11,7 +11,7 @@ const path = require('path');
+ const os = require('os');
+ 
+ // ─── Constants ─────────────────────────────────────────────────
+-const VERSION = '13.5';
++const VERSION = '15.7';
+ const PORT = 8000;
+ const TMP_DIR = path.join(os.tmpdir(), 'ribbon-saas');
+ const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
+
+commit 50f257c80df44e3deb106c438a3fe93ca0c7a0dd
+Author: seamlee <lilymagnc@gmail.com>
+Date:   Sat Mar 28 12:46:22 2026 +0900
+
+    fix: restore stable v15.2 with 34.5mm margins and 180-deg rotation
+
+diff --git a/bridge_server.js b/bridge_server.js
+index e5a5e95..58b0fc6 100644
+--- a/bridge_server.js
++++ b/bridge_server.js
+@@ -230,8 +230,7 @@ $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
+ $widthUnits = [int](210 / 25.4 * 100)
+ $totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
+ $customPaper = New-Object System.Drawing.Printing.PaperSize("RibbonBanner", $widthUnits, $totalLengthUnits)
+-# [핵심] RawKind를 0(Custom)으로 주입하여 드라이버의 A4 강제 회귀를 방지
+-$customPaper.RawKind = 0 
++$customPaper.RawKind = 256 
+ 
+ $pd.DefaultPageSettings.PaperSize = $customPaper
+ $pd.DefaultPageSettings.Landscape = $false
+@@ -248,10 +247,18 @@ $pd.Add_PrintPage({
+   foreach ($path in $images) {
+     if (Test-Path $path) {
+       $img = [System.Drawing.Image]::FromFile($path)
+-      # [V15.1 정규] 사용자가 웹 UI에서 맞춘 위치(safeX)에 정확히 출력
++      # [V15.6] 정밀 좌표 인쇄 - 사용자 여백(safeX) 반영
+       $destRect = New-Object System.Drawing.RectangleF(${safeX}, $currentY, ${widthMM}, ${lengthMM})
+       $g.DrawImage($img, $destRect)
+       
++      # [V15.6] 중간선 추가: 두 리본이 만나는 지점에 1mm 두께의 가이드선 생성
++      if ($path -eq $images[0] -and $images.Count -gt 1) {
++          $lineY = $currentY + ${lengthMM}
++          $blackPen = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 1)
++          # 리본 실 출력 너비만큼 선 긋기
++          $g.DrawLine($blackPen, ${safeX}, $lineY, (${safeX} + ${widthMM}), $lineY)
++      }
++
+       $currentY += ${lengthMM}
+       $img.Dispose()
+     }

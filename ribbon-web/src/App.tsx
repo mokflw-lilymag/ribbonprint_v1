@@ -840,7 +840,7 @@ const RibbonCanvas = ({
                <img 
                  src={shopLogoBase64} 
                  alt="Logo" 
-                 style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 0.5 }} 
+                 style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 1 }} 
                />
             </div>
         )}
@@ -973,7 +973,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [lace, setLace] = useState(RIBBON_TYPES[0].lace);
   const [marginTop, setMarginTop] = useState(RIBBON_TYPES[0].marginTop);
   const [marginBottom, setMarginBottom] = useState(RIBBON_TYPES[0].marginBottom);
-  const [marginOffset, setMarginOffset] = useState<number>(0); // 사용자 수동 보정값 (기본 0)
+  const [marginOffset, setMarginOffset] = useState(0); // 사용자 수동 보정값 (기본 0)
 
   // Left Ribbon State
   const [leftText, setLeftText] = useState('祝發展');
@@ -1163,10 +1163,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
     // Auto-Pair Cloud Print Agent with Local Bridge
     if (session?.user?.id) {
-       if ((session.user as any)?.user_metadata?.shop_logo) {
-         setShopLogo((session.user as any).user_metadata.shop_logo);
-         setPrintLogo(true);
-       }
+       const metaLogo = (session.user as any)?.user_metadata?.shop_logo;
+       setShopLogo(metaLogo || null);
+       if (metaLogo) setPrintLogo(true);
+       
        fetch('http://localhost:8000/api/pair', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
@@ -1688,7 +1688,6 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                   setLace(selected.lace || 0);
                   setMarginTop(selected.marginTop || 0);
                   setMarginBottom(selected.marginBottom || 0);
-                  setMarginOffset(selected.marginOffset || 0);
                 }
               }}
               className="w-full p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -1740,7 +1739,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             <span className="text-[10px] text-slate-500">L</span>
             <input 
               type="range" 
-              min="-20" max="20" step="0.5" 
+              min="-2" max="2" step="0.5" 
               value={marginOffset}
               onChange={e => setMarginOffset(Number(e.target.value))}
               className="flex-1 accent-blue-500"
@@ -1924,7 +1923,17 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">🏪 내 점포 로고</label>
             <div className="flex items-center gap-2">
-              {shopLogo && <button onClick={() => { setShopLogo(null); setPrintLogo(false); }} className="text-[10px] text-red-500 font-bold hover:text-red-400">삭제</button>}
+              {shopLogo && <button 
+                   onClick={async () => {
+                     setShopLogo(null);
+                     setPrintLogo(false);
+                     await supabase.auth.updateUser({ data: { shop_logo: "" } });
+                     alert("로고가 서버에서 완전히 삭제되었습니다.");
+                   }} 
+                   className="text-[10px] text-red-500 font-bold hover:text-red-400"
+                 >
+                   삭제
+                 </button>}
               <label className="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
                 <div className="w-7 h-4 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full"></div>
@@ -2257,6 +2266,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
               rotatedIds={leftRotated} onCharClick={() => {}}
               scaleRatio={3} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
+              shopLogo={shopLogo} printLogo={printLogo}
             />
           </div>
           {/* Middle Connection Line */}
@@ -2266,6 +2276,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={rightRotated} onCharClick={() => {}}
             scaleRatio={3} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
+            shopLogo={shopLogo} printLogo={printLogo}
           />
         </div>
 
@@ -2276,6 +2287,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={leftRotated} onCharClick={() => {}}
             scaleRatio={3} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
+            shopLogo={shopLogo} printLogo={printLogo}
           />
         </div>
         <div ref={separateRightRef} style={{ backgroundColor: 'white' }}>
@@ -2284,6 +2296,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
             rotatedIds={rightRotated} onCharClick={() => {}}
             scaleRatio={3} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
+            shopLogo={shopLogo} printLogo={printLogo}
           />
         </div>
 
@@ -2549,8 +2562,9 @@ function LoadConfigDialog({ isOpen, onClose, onLoad, userId }: { isOpen: boolean
   );
 }
 function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  const [queue, setQueue] = useState<any[]>([]);
-  const pollRef = useRef<any>(null);
+  const [queue, setQueue] = useState<any[]>([]); // Restored
+  const [tick, setTick] = useState(0); 
+  const pollRef = useRef<any>(null); // Restored
 
   const fetchQueue = async () => {
     try {
@@ -2564,10 +2578,12 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
     if (isOpen) {
       fetchQueue();
       pollRef.current = setInterval(fetchQueue, 3000);
-    } else {
-      if (pollRef.current) clearInterval(pollRef.current);
+      const tickInterval = setInterval(() => setTick(t => t + 1), 1000);
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        clearInterval(tickInterval);
+      };
     }
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [isOpen]);
 
   const handleRetry = async (id: string) => {
@@ -2616,41 +2632,71 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               현재 대기 중인 작업이 없습니다.
             </div>
           ) : (
-            queue.map(job => (
-              <div key={job.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <div className="text-[11px] font-bold text-slate-300">{job.printer}</div>
-                    <div className="text-[10px] text-slate-500">{job.width}mm x {job.length}mm ({job.segments}단)</div>
+            queue.map(job => {
+              // Calculate remaining time (120 seconds total)
+              const createdTime = new Date(job.timestamp).getTime();
+              const now = Date.now();
+              const elapsed = Math.floor((now - createdTime) / 1000);
+              const timeLeft = Math.max(0, 120 - elapsed);
+              
+              // Auto-delete when time's up
+              if (timeLeft <= 0 && job.status !== 'printing') {
+                handleDelete(job.id);
+              }
+
+              return (
+                <div key={job.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3 relative overflow-hidden group">
+                  {/* Progress bar background for timer */}
+                  <div 
+                    className="absolute bottom-0 left-0 h-0.5 bg-blue-500/30 transition-all duration-1000" 
+                    style={{ width: `${(timeLeft / 120) * 100}%` }}
+                  />
+
+                  <div className="flex justify-between items-start mb-1">
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-300">{job.printer}</div>
+                      <div className="text-[10px] text-slate-500">{job.width}mm x {job.length}mm ({job.segments}단)</div>
+                    </div>
+                    <div className={cn(
+                      "px-2 py-0.5 rounded text-[9px] font-bold",
+                      job.status === 'printing' ? "bg-blue-900/40 text-blue-400" :
+                      job.status === 'completed' ? "bg-emerald-900/40 text-emerald-400" :
+                      "bg-red-900/40 text-red-400"
+                    )}>
+                      {job.status === 'printing' ? '인쇄 중' : job.status === 'completed' ? '완료' : '오류'}
+                    </div>
                   </div>
-                  <div className={cn(
-                    "px-2 py-0.5 rounded text-[9px] font-bold",
-                    job.status === 'printing' ? "bg-blue-900/40 text-blue-400" :
-                    job.status === 'completed' ? "bg-emerald-900/40 text-emerald-400" :
-                    "bg-red-900/40 text-red-400"
-                  )}>
-                    {job.status === 'printing' ? '인쇄 중' : job.status === 'completed' ? '완료' : '오류'}
+
+                  {/* Auto-delete Timer Text */}
+                  <div className="flex items-center gap-1.5 mb-2 mt-1">
+                    <div className={cn(
+                      "text-[9px] py-0.5 px-1.5 rounded-full font-mono font-bold",
+                      timeLeft < 10 ? "bg-red-500/20 text-red-400 animate-pulse" : "bg-slate-800 text-slate-400"
+                    )}>
+                      {timeLeft}s
+                    </div>
+                    <span className="text-[9px] text-slate-500">후 목록에서 자동 삭제됩니다.</span>
                   </div>
-                </div>
-                
-                <div className="flex gap-1 mt-2">
-                  {job.status !== 'printing' && (
+                  
+                  <div className="flex gap-1">
+                    {job.status !== 'printing' && (
+                      <button 
+                        onClick={() => handleRetry(job.id)}
+                        className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] rounded transition-colors"
+                      >
+                        🔄 다시 출력
+                      </button>
+                    )}
                     <button 
-                      onClick={() => handleRetry(job.id)}
-                      className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] rounded transition-colors"
+                      onClick={() => handleDelete(job.id)}
+                      className="flex-1 py-1.5 bg-slate-700 hover:bg-red-900/40 text-slate-300 text-[10px] rounded transition-colors"
                     >
-                      🔄 다시 출력
+                      🗑️ 바로 삭제
                     </button>
-                  )}
-                  <button 
-                    onClick={() => handleDelete(job.id)}
-                    className="flex-1 py-1.5 bg-slate-700 hover:bg-red-900/40 text-slate-300 text-[10px] rounded transition-colors"
-                  >
-                    🗑️ 삭제
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
