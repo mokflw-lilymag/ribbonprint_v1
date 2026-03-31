@@ -2443,7 +2443,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
               <button 
                 onClick={() => {
-                  window.open('/RibbonBridge_Setup_v23_1.exe');
+                  window.open('/RibbonBridge_Setup_v25_0.exe');
                   setIsBridgeModalOpen(false);
                 }}
                 className="flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40"
