@@ -1,46 +1,64 @@
 @echo off
+setlocal
 echo ==============================================
-echo    RibbonBridge Installer Builder (SaaS)
+echo    RibbonBridge Universal Builder v25.0
 echo ==============================================
 echo.
 
-echo [1] Compiling C# Engine (ribbon_printer.exe)...
-"%windir%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:ribbon_printer.exe ribbon_printer.cs
+:: 1. Compile C# Native Printing Engine
+echo [1] Compiling C# Native Engine (ribbon_printer.exe)...
+"%windir%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:RibbonBridge_Dist\ribbon_printer.exe ribbon_printer.cs
 if %errorlevel% neq 0 (
-  echo ERROR: Failed to compile C# engine.
-  pause
-  exit /b
+  echo ERROR: printer engine compilation failed.
+  pause & exit /b
 )
 
-echo [2] Checking 'pkg' module to compile Node.js server...
-call npm list -g pkg >nul 2>&1
+:: 2. Compile Node.js Bridge Server
+echo [2] Compiling Bridge Server (RibbonBridge_Core.exe)...
+call npx pkg RibbonBridge_Dist\bridge_server.js --target node18-win-x64 --output RibbonBridge_Dist\RibbonBridge_Core.exe
 if %errorlevel% neq 0 (
-  echo Installing pkg globally...
-  call npm install -g pkg
+  echo ERROR: Bridge server packaging failed.
+  pause & exit /b
 )
 
-echo [3] Compiling bridge_server.js to RibbonBridge_Core.exe...
-call npx pkg bridge_server.js --target node18-win-x64 --output RibbonBridge_Core.exe
+:: 3. Prepare Package for Embedding
+echo [3] Organizing Assets for Setup Package...
+if exist "RibbonBridge_Final" rd /s /q "RibbonBridge_Final"
+mkdir RibbonBridge_Final
+mkdir RibbonBridge_Final\system
 
-echo [4] Creating Dist folder...
-if exist "RibbonBridge_Setup" rd /s /q "RibbonBridge_Setup"
-mkdir RibbonBridge_Setup
+copy "RibbonBridge_Dist\RibbonBridge_Core.exe" "RibbonBridge_Final\system\" /Y
+copy "RibbonBridge_Dist\ribbon_printer.exe" "RibbonBridge_Final\system\" /Y
+copy "RibbonBridge_Dist\[필독_꽃집사장님]리본프린터_자동설치.bat" "RibbonBridge_Final\" /Y
 
-copy RibbonBridge_Core.exe RibbonBridge_Setup\
-copy ribbon_printer.exe RibbonBridge_Setup\
-copy ribbon_printer_hp.exe RibbonBridge_Setup\ >nul 2>&1
+:: Create Temporary ZIP (Limited to files we need)
+if exist "RibbonBridge_Temp.zip" del "RibbonBridge_Temp.zip"
+powershell -Command "Compress-Archive -Path 'RibbonBridge_Final\*' -DestinationPath 'RibbonBridge_Temp.zip' -Force"
 
-echo Set WshShell = CreateObject("WScript.Shell") > RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
-echo On Error Resume Next >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
-echo WshShell.Run "taskkill /F /IM RibbonBridge_Core.exe", 0, True >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
-echo WScript.Sleep 500 >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
-echo WshShell.Run chr(34) ^& "RibbonBridge_Core.exe" ^& Chr(34), 0 >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
-echo Set WshShell = Nothing >> RibbonBridge_Setup\인쇄서버_시작하기(클릭).vbs
+:: 4. Compile Final EXE Installer with ZIP Embedded
+echo [4] Building Final EXE Installer (RibbonBridge_Setup_v25.exe)...
 
+:: References needed for RibbonInstaller.cs: System.IO.Compression, System.Windows.Forms, etc.
+set "REFS=/r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll"
+set "RES=/resource:RibbonBridge_Temp.zip,RibbonBridgePackage.zip"
+
+"%windir%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /target:winexe /nologo /out:RibbonBridge_Setup_v25.exe %REFS% %RES% RibbonInstaller.cs
+
+if %errorlevel% neq 0 (
+  echo ERROR: Installer compilation failed.
+  pause & exit /b
+)
+
+:: Clean up temporary files
+if exist "RibbonBridge_Temp.zip" del "RibbonBridge_Temp.zip"
+if exist "RibbonBridge_Final" rd /s /q "RibbonBridge_Final"
+
+echo.
 echo ==============================================
-echo BUILD COMPLETE!
-echo [INSTALL INSTRUCTIONS FOR FLORISTS]
-echo Just zip 'RibbonBridge_Setup' and give it to florists.
-echo They just double click 'RibbonBridge_Core.exe'.
+echo    ✅ ALL-IN-ONE BUILD SUCCESSFUL!
+echo    Final File: RibbonBridge_Setup_v25.exe
+echo.
+echo    사용자(꽃집)에게 RibbonBridge_Setup_v25.exe 파일만 전달하세요.
 echo ==============================================
+echo.
 pause

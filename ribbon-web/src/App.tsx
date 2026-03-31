@@ -1302,13 +1302,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               width_mm: w,
               length_mm: h,
               media_type: mediaType,
-              cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
+              cutting_margin_mm: selectedPrinterType === 'xprinter' ? cuttingMargin : (mediaType === 'roll' ? cuttingMargin : 0),
               print_quality: printQuality,
-              // Xprinter: marginOffset 불필요 (용지=리본폭, X=0 전체폭 인쇄)
-              // M105: 기존 Margin-as-Center 공식 유지
-              margin_offset_mm: selectedPrinterType === 'xprinter'
-                ? 0
-                : (RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset
+              // 모든 프린터(M105, Xprinter) 상관없이 사용자 보정치 값 전달
+              margin_offset_mm: (RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset
             }),
             signal: controller.signal
           });

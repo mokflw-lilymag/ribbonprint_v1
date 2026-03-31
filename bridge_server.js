@@ -204,8 +204,8 @@ async function executePrintJob(job) {
 
     // ─── Dual Engine Branching ───
     if (isXprinterType(job.printer)) {
-      console.log(`[Engine] Routing to Xprinter GDI Engine (Direct-Width)`);
-      await printViaGDI_Xprinter(job.printer, localPaths, width, length);
+      console.log(`[Engine] Routing to Xprinter GDI Engine (Direct-Width/Centered)`);
+      await printViaGDI_Xprinter(job.printer, localPaths, width, length, cut, margin);
     } else {
       console.log(`[Engine] Routing to Epson M105 GDI Engine (Margin-as-Center)`);
       await printViaGDI(job.printer, localPaths, width, length, margin, cut, mediaType);
@@ -351,16 +351,20 @@ $pd.Add_PrintPage({
 //   용지 폭 = 리본 폭 (38~110mm), X=0 전체 폭 인쇄
 //   M105 엔진과 완전히 독립 — M105 코드는 한 줄도 수정하지 않음
 // ═══════════════════════════════════════════════════════════════
-function printViaGDI_Xprinter(printerName, images, widthMM, lengthMM) {
+function printViaGDI_Xprinter(printerName, images, widthMM, lengthMM, cuttingMarginMM = 0, marginOffsetMM = 0) {
   return new Promise((resolve, reject) => {
     const imageList = Array.isArray(images) ? images : [images];
     const safePrinter = printerName.replace(/'/g, "''");
 
-    // Xprinter: 용지 폭 = 리본 폭 (A4 고정이 아님)
-    // 총 길이 = 리본 길이 × 세그먼트 수
-    const totalLengthMM = lengthMM * imageList.length;
+    // Xprinter: 물리적 최대 폭 고정 (108mm) - 프린터 중앙 가이드에 맞추기 위함
+    const MAX_PRINTER_WIDTH = 108;
+    // X 인쇄 시작점: 108mm 캔버스 중앙에 리본(widthMM)을 배치 + 사용자 보정치
+    const startX = (MAX_PRINTER_WIDTH - widthMM) / 2 + marginOffsetMM;
 
-    console.log(`[Xprinter GDI v1.0] Paper: ${widthMM}mm × ${totalLengthMM}mm, Segments: ${imageList.length}`);
+    // 총 길이 = (리본 길이 × 세그먼트 수) + 마지막 커팅 여백(20mm 등)
+    const totalLengthMM = (lengthMM * imageList.length) + cuttingMarginMM;
+
+    console.log(`[Xprinter GDI v1.1] Virtual Paper: ${MAX_PRINTER_WIDTH}mm, X-Offset: ${startX}mm, Length: ${totalLengthMM}mm, CutMargin: ${cuttingMarginMM}mm`);
 
     const psScript = `
 try {
