@@ -2468,7 +2468,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           sessionStorage.setItem('bridge_update_dismissed', 'true');
         }}
         onDownload={() => {
-          window.open('https://rzyppdqawepbsjmtjvuo.supabase.co/storage/v1/object/public/assets/guides/RibbonBridge_Setup_v15_7_2.exe');
+          window.open(`/RibbonBridge_Setup_v${"25_0"}.exe`);
           setIsUpdateModalOpen(false);
         }}
       />
