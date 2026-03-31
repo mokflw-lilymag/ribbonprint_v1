@@ -959,7 +959,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   // User Print Settings
   const [printTarget, setPrintTarget] = useState<'both' | 'left' | 'right'>('both');
   const [printLayout, setPrintLayout] = useState<'connected' | 'separate'>('connected');
-  const [mediaType, setMediaType] = useState<'roll' | 'cut'>('roll');
+  const [mediaType, setMediaType] = useState<'roll' | 'cut'>('cut');
   const [cuttingMargin, setCuttingMargin] = useState(50); // 커팅 여유분 (mm), 기본 5cm = 50mm
   const [printQuality, setPrintQuality] = useState<'fast' | 'high'>('fast');
 
@@ -1744,11 +1744,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="grid grid-cols-3 gap-2">
              <select 
                value={mediaType} 
-               onChange={e => setMediaType(e.target.value as any)}
+               onChange={e => {
+                 const v = e.target.value as 'roll' | 'cut';
+                 if (v === 'roll') {
+                   alert('🔧 롤리본 정밀 제어 기능은 현재 개발 중입니다.\n컷 리본 모드를 사용해 주세요.');
+                   setMediaType('cut');
+                 } else {
+                   setMediaType(v);
+                 }
+               }}
                className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-slate-200 outline-none focus:ring-1"
              >
-               <option value="roll">🔄 롤 리본</option>
                <option value="cut">📄 컷 리본</option>
+               <option value="roll">🔄 롤 리본 (개발중)</option>
              </select>
              <select 
                value={printQuality} 
