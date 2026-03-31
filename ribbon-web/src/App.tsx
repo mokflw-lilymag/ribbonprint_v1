@@ -856,7 +856,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = '25.0';
+const REQUIRED_BRIDGE_VERSION = '23.1';
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -2443,7 +2443,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </button>
               <button 
                 onClick={() => {
-                  window.open('https://rzyppdqawepbsjmtjvuo.supabase.co/storage/v1/object/public/assets/guides/RibbonBridge_Setup_v15_7_2.exe');
+                  window.open('/RibbonBridge_Setup_v23_1.exe');
                   setIsBridgeModalOpen(false);
                 }}
                 className="flex-1 max-w-[200px] px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40"
