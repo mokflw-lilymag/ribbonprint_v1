@@ -1,12 +1,12 @@
 [Setup]
 AppName=RibbonBridge Server
-AppVersion=15.7
+AppVersion=25.0
 AppPublisher=RibbonSaaS
 DefaultDirName={localappdata}\RibbonBridge
 DisableDirPage=yes
 DefaultGroupName=RibbonBridge
 DisableProgramGroupPage=yes
-OutputBaseFilename=RibbonBridge_Setup_15_7
+OutputBaseFilename=RibbonBridge_Setup_v25_0
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=lowest
