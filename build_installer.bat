@@ -42,7 +42,7 @@ echo [4] Building Final EXE Installer (RibbonBridge_Setup_v25.exe)...
 set "REFS=/r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll"
 set "RES=/resource:RibbonBridge_Temp.zip,RibbonBridgePackage.zip"
 
-"%windir%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /target:winexe /nologo /out:RibbonBridge_Setup_v25.exe %REFS% %RES% RibbonInstaller.cs
+"%windir%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /target:winexe /nologo /out:RibbonBridge_Setup_v25_0.exe %REFS% %RES% RibbonInstaller.cs
 
 if %errorlevel% neq 0 (
   echo ERROR: Installer compilation failed.
@@ -56,9 +56,10 @@ if exist "RibbonBridge_Final" rd /s /q "RibbonBridge_Final"
 echo.
 echo ==============================================
 echo    ✅ ALL-IN-ONE BUILD SUCCESSFUL!
-echo    Final File: RibbonBridge_Setup_v25.exe
+echo    Final File: RibbonBridge_Setup_v25_0.exe
 echo.
-echo    사용자(꽃집)에게 RibbonBridge_Setup_v25.exe 파일만 전달하세요.
+echo    사용자(꽃집)에게 RibbonBridge_Setup_v25_0.exe 파일만 전달하세요.
 echo ==============================================
 echo.
 pause
+
