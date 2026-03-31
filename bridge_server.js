@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-//   RibbonBridge v23.1 — Dual Engine (Epson M105 + Xprinter)
-//   GDI Engine v23.0 · Margin-as-Center (M105)
+//   RibbonBridge v25.0 — Dual Engine (Epson M105 + Xprinter)
+//   GDI Engine v25.0 (Unified Build for Florasync-SaaS)
 //   GDI Engine v1.0  · Direct-Width (XP-DT108B Thermal)
 // ═══════════════════════════════════════════════════════════════
 

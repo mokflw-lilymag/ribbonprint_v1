@@ -2479,41 +2479,55 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 function UpdateBridgeModal({ isOpen, onClose, onDownload }: { isOpen: boolean, onClose: () => void, onDownload: () => void }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200]">
-      <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-500 to-red-400"></div>
-        <div className="text-6xl mb-4">🚀</div>
-        <h2 className="text-2xl font-semibold text-white mb-2">최신 브릿지 업데이트 발견</h2>
-        <p className="text-slate-400 mb-6 text-sm leading-relaxed">
-          클릭 한 번으로 완벽하게 새로 설치됩니다!<br/>
-          아래 버튼을 눌러 <b>최신 브릿지 설치파일</b>을 다운로드한 후,<br/>
-          <span className="text-white font-bold">리본프린터_자동설치.exe</span>를 실행해 주세요.
-        </p>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[200] p-4">
+      <div className="bg-slate-900 rounded-[2rem] border border-slate-700 shadow-2xl w-full max-w-lg p-10 text-center relative overflow-hidden ring-1 ring-white/10">
+        {/* Top Accent Gradient */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-500 via-blue-500 to-emerald-400"></div>
         
-        <div className="bg-orange-900/20 border border-orange-500/30 rounded p-4 mb-6 text-left">
-          <p className="text-orange-300 text-xs font-semibold mb-2 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-            단 1초! 세상에서 가장 쉬운 설치 방법
-          </p>
-          <ol className="text-slate-300 text-[11px] space-y-1.5 leading-tight">
-            <li>1. 아래 <b>다운로드 버튼</b>을 클릭하여 파일을 받습니다.</li>
-            <li>2. 다운로드된 <b className="text-white">리본프린터_자동설치.exe</b> 더블 클릭!</li>
-            <li>3. (PC 보호 화면시) <b className="text-blue-300">추가 정보</b> &rarr; <b className="text-blue-300">실행</b>을 누르면 끝! ✨</li>
-          </ol>
+        {/* Icon Section */}
+        <div className="mb-8 flex justify-center">
+          <div className="relative">
+            <div className="absolute -inset-4 bg-blue-500/20 blur-2xl rounded-full"></div>
+            <div className="bg-slate-800 p-6 rounded-[2rem] border border-slate-700 relative">
+               <Printer size={64} className="text-blue-400" strokeWidth={1} />
+               <div className="absolute -bottom-1 -right-1 bg-red-500 w-4 h-4 rounded-full border-2 border-slate-900 shadow-lg animate-pulse" />
+            </div>
+          </div>
         </div>
 
-        <div className="flex gap-3 justify-center">
+        {/* Text Section */}
+        <h2 className="text-3xl font-extrabold text-white mb-6 tracking-tight">프린트 브릿지 설치 필요</h2>
+        <div className="space-y-4 mb-8 text-slate-300 leading-relaxed font-medium">
+          <p>인쇄를 시작하려면 <span className="text-white">최초 1회 브릿지 마법사</span> 설치가 필요합니다.</p>
+          <p>다운로드 후 [설치 마법사]를 열고 딱 1번만 실행하시면<br/>앞으로 자동으로 컴퓨터가 켜질 때마다 영구적으로 연결됩니다!</p>
+        </div>
+
+        {/* Tip Box (PC Protection) */}
+        <div className="bg-blue-900/20 border border-blue-500/30 rounded-2xl p-5 mb-10 text-left">
+          <div className="flex items-start gap-3">
+             <span className="text-xl">💡</span>
+             <div className="text-sm">
+                <p className="text-blue-200 font-bold mb-1.5">"Windows의 PC 보호" 창이 나타날 시</p>
+                <p className="text-blue-300/80 leading-relaxed">
+                  <strong className="text-white border-b border-white/40">추가 정보</strong> 버튼을 누르신 후, 우측 하단에 생기는 <strong className="text-white">실행 버튼</strong>을 눌러주시면 깔끔하게 1초만에 자동 설치됩니다.
+                </p>
+             </div>
+          </div>
+        </div>
+
+        {/* Button Section */}
+        <div className="flex gap-4">
           <button 
             onClick={onClose}
-            className="px-6 py-3 rounded-lg font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl transition-all active:scale-95 border border-slate-700/50"
           >
-            나중에
+            닫기
           </button>
           <button 
             onClick={onDownload}
-            className="flex-1 px-6 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-lg shadow-blue-900/40 transform active:scale-95"
+            className="flex-[1.8] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-900/40 hover:shadow-blue-500/20 active:scale-95"
           >
-            📥 수동 설치 파일 다운로드
+            자동 설치 패키지 다운로드
           </button>
         </div>
       </div>
