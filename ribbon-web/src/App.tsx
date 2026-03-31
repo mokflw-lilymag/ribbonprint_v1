@@ -2538,7 +2538,6 @@ function LoadConfigDialog({ isOpen, onClose, onLoad, userId }: { isOpen: boolean
 }
 function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const [queue, setQueue] = useState<any[]>([]); // Restored
-  const [tick, setTick] = useState(0); 
   const pollRef = useRef<any>(null); // Restored
 
   const fetchQueue = async () => {
@@ -2553,10 +2552,8 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
     if (isOpen) {
       fetchQueue();
       pollRef.current = setInterval(fetchQueue, 3000);
-      const tickInterval = setInterval(() => setTick(t => t + 1), 1000);
       return () => {
         if (pollRef.current) clearInterval(pollRef.current);
-        clearInterval(tickInterval);
       };
     }
   }, [isOpen]);
