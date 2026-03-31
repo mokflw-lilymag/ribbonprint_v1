@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
+using Microsoft.Win32;
 
 namespace ServiceLauncher
 {
@@ -8,39 +10,66 @@ namespace ServiceLauncher
     {
         static void Main(string[] args)
         {
-            string appDir = AppDomain.CurrentDomain.BaseDirectory;
-            string targetExe = Path.Combine(appDir, "sys_service.exe");
-
-            if (File.Exists(targetExe))
+            // Ensure single instance of launcher to avoid duplicates
+            bool createdNew;
+            using (Mutex mutex = new Mutex(true, "RibbonBridgeLauncher_Mutex", out createdNew))
             {
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = targetExe,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    WorkingDirectory = appDir
-                };
+                if (!createdNew) return;
 
-                // 자동 실행 레지스트리 자동 등록 (배치파일 필요 없도록)
-                try
+                string appDir = AppDomain.CurrentDomain.BaseDirectory;
+                // Prefer RibbonBridge_Core.exe or sys_service.exe
+                string targetExe = Path.Combine(appDir, "RibbonBridge_Core.exe");
+                if (!File.Exists(targetExe)) targetExe = Path.Combine(appDir, "sys_service.exe");
+
+                // Early exit if the core binary isn't found
+                if (!File.Exists(targetExe)) return;
+
+                // Ensure auto-start registry entry is always present
+                EnsureAutoStart();
+
+                // Infinite loop to serve as a watchdog
+                while (true)
                 {
-                    string exePath = Process.GetCurrentProcess().MainModule.FileName;
-                    using (Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true))
+                    try
                     {
-                        key.SetValue("RibbonBridgeService", "\"" + exePath + "\"");
+                        // Check if the service is currently running
+                        string procName = Path.GetFileNameWithoutExtension(targetExe);
+                        Process[] processes = Process.GetProcessesByName(procName);
+
+                        if (processes.Length == 0)
+                        {
+                            // If NO service found, start it with hidden window
+                            ProcessStartInfo startInfo = new ProcessStartInfo
+                            {
+                                FileName = targetExe,
+                                WindowStyle = ProcessWindowStyle.Hidden,
+                                CreateNoWindow = true,
+                                UseShellExecute = false,
+                                WorkingDirectory = appDir
+                            };
+                            Process.Start(startInfo);
+                        }
                     }
-                }
-                catch { }
+                    catch { /* Silence errors to keep watchdog alive */ }
 
-                // Kill existing process first for clean restart
-                foreach (var process in Process.GetProcessesByName("sys_service"))
-                {
-                    try { process.Kill(); } catch { }
+                    // Check every 10 seconds
+                    Thread.Sleep(10000);
                 }
-
-                try { Process.Start(startInfo); } catch { }
             }
+        }
+
+        static void EnsureAutoStart()
+        {
+            try
+            {
+                string exePath = Process.GetCurrentProcess().MainModule.FileName;
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true))
+                {
+                    key.SetValue("RibbonBridgeService", "\"" + exePath + "\"");
+                }
+            }
+            catch { }
         }
     }
 }
+

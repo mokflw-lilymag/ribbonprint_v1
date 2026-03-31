@@ -457,6 +457,30 @@ app.get('/api/fonts/file/:fn', (req, res) => {
   if (fs.existsSync(p)) res.sendFile(p); else res.status(404).end();
 });
 
-app.listen(PORT, '127.0.0.1', () => {
+// ─── Robust Server Launch ──────────────────────────────────────
+const server = app.listen(PORT, '127.0.0.1', () => {
+  console.log('╔══════════════════════════════════════════════════╗');
+  console.log(`║      RibbonBridge v${VERSION} — (Stable) at PORT ${PORT}    ║`);
+  console.log('╚══════════════════════════════════════════════════╝');
   console.log(`\n> 🚀 RibbonBridge v${VERSION} (Stable Mode) at http://localhost:${PORT}\n`);
 });
+
+// Port in Use Handler
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`[CRITICAL] Port ${PORT} already in use. Please close other bridge versions.`);
+    // In production, we might want to kill the conflicting process, but usually better to log clearly.
+    setTimeout(() => process.exit(1), 5000); 
+  }
+});
+
+// Global Exception Handlers (Prevent silent death)
+process.on('uncaughtException', (err) => {
+  console.error(`[UNCAUGHT] ${err.message}\n${err.stack}`);
+  // Keep the process alive if possible, but log the error
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED REJECTION] at:', promise, 'reason:', reason);
+});
+

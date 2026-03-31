@@ -103,21 +103,22 @@ namespace RibbonBridgeInstaller
                     File.Delete(zipPath); // Cleanup
                 }
 
-                // 4. 레지스트리 자동 실행 설정 (Core 실행 파일 직접 등록)
-                string corePath = Path.Combine(installDir, "system", "RibbonBridge_Core.exe");
-                if (!File.Exists(corePath)) corePath = Path.Combine(installDir, "RibbonBridge_Core.exe");
+                // 4. 레지스트리 자동 실행 설정 (Watchdog 실행 파일 등록)
+                string launcherPath = Path.Combine(installDir, "system", "launch_service.exe");
+                if (!File.Exists(launcherPath)) launcherPath = Path.Combine(installDir, "launch_service.exe");
 
                 string runKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(runKey, true))
                 {
-                    key.SetValue("RibbonBridge", "\"" + corePath + "\"");
+                    key.SetValue("RibbonBridgeService", "\"" + launcherPath + "\"");
                 }
 
-                // 5. 서버 즉시 실행
-                if (File.Exists(corePath))
+                // 5. 와치독 즉시 실행 (와치독이 코어를 자동으로 띄움)
+                if (File.Exists(launcherPath))
                 {
-                    Process.Start(new ProcessStartInfo(corePath) { WorkingDirectory = Path.GetDirectoryName(corePath) });
+                    Process.Start(new ProcessStartInfo(launcherPath) { WorkingDirectory = Path.GetDirectoryName(launcherPath) });
                 }
+
 
                 form.Close();
                 MessageBox.Show("🎉 리본폰트 브릿지 v25.0 설치가 완료되었습니다!\n\n이제 웹 사이트에서 바로 인쇄하실 수 있습니다.\n(컴퓨터 시작 시 자동으로 실행됩니다.)", "설치 성공", MessageBoxButtons.OK, MessageBoxIcon.Information);
