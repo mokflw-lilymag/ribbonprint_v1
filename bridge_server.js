@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
-//   RibbonBridge v23.0 — Epson M-Series Engine
-//   GDI Engine v23.0 · Margin-as-Center Absolute Alignment
+//   RibbonBridge v23.1 — Dual Engine (Epson M105 + Xprinter)
+//   GDI Engine v23.0 · Margin-as-Center (M105)
+//   GDI Engine v1.0  · Direct-Width (XP-DT108B Thermal)
 // ═══════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -11,13 +12,26 @@ const path = require('path');
 const os = require('os');
 
 // ─── Constants ─────────────────────────────────────────────────
-const VERSION = '23.0';
+const VERSION = '23.1';
 const PORT = 8000;
 const TMP_DIR = path.join(os.tmpdir(), 'ribbon-saas');
 const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
 
 const isPkg = typeof process.pkg !== 'undefined';
 const BASE_DIR = isPkg ? path.dirname(process.execPath) : __dirname;
+
+// ─── Printer Type Detection ────────────────────────────────────
+function detectPrinterType(driverName, printerName) {
+  const combined = ((driverName || '') + ' ' + (printerName || '')).toLowerCase();
+  if (combined.includes('xprinter') || combined.includes('xp-dt') || combined.includes('xp-tt')) return 'xprinter';
+  if (combined.includes('epson') && (combined.includes('m1') || combined.includes('m-1'))) return 'epson_m105';
+  return 'generic';
+}
+
+function isXprinterType(printerName) {
+  const name = (printerName || '').toLowerCase();
+  return name.includes('xprinter') || name.includes('xp-dt') || name.includes('xp-tt');
+}
 
 // ─── App Setup ─────────────────────────────────────────────────
 const app = express();
@@ -81,7 +95,8 @@ app.get('/api/printers', (_req, res) => {
       return {
         name: p.Name,
         status: statusStr,
-        driver: p.DriverName || ''
+        driver: p.DriverName || '',
+        type: detectPrinterType(p.DriverName, p.Name)
       };
     });
     return res.json({ status: 'success', data });
@@ -187,7 +202,14 @@ async function executePrintJob(job) {
     const cut = parseFloat(job.cutting_margin) || 0;
     const mediaType = job.mediaType || 'roll';
 
-    await printViaGDI(job.printer, localPaths, width, length, margin, cut, mediaType);
+    // ─── Dual Engine Branching ───
+    if (isXprinterType(job.printer)) {
+      console.log(`[Engine] Routing to Xprinter GDI Engine (Direct-Width)`);
+      await printViaGDI_Xprinter(job.printer, localPaths, width, length);
+    } else {
+      console.log(`[Engine] Routing to Epson M105 GDI Engine (Margin-as-Center)`);
+      await printViaGDI(job.printer, localPaths, width, length, margin, cut, mediaType);
+    }
 
     job.status = 'completed';
     console.log(`[Queue] Job Completed: ${job.id}`);
@@ -317,6 +339,100 @@ $pd.Add_PrintPage({
       } else {
         const errMsg = stderr.trim() || stdout.trim() || `GDI exit code ${code}`;
         console.error(`[GDI Error] ${errMsg}`);
+        reject(new Error(errMsg));
+      }
+    });
+    ps.on('error', err => reject(new Error(`spawn error: ${err.message}`)));
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   GDI Engine v1.0 — Xprinter Direct-Width (XP-DT108B)
+//   용지 폭 = 리본 폭 (38~110mm), X=0 전체 폭 인쇄
+//   M105 엔진과 완전히 독립 — M105 코드는 한 줄도 수정하지 않음
+// ═══════════════════════════════════════════════════════════════
+function printViaGDI_Xprinter(printerName, images, widthMM, lengthMM) {
+  return new Promise((resolve, reject) => {
+    const imageList = Array.isArray(images) ? images : [images];
+    const safePrinter = printerName.replace(/'/g, "''");
+
+    // Xprinter: 용지 폭 = 리본 폭 (A4 고정이 아님)
+    // 총 길이 = 리본 길이 × 세그먼트 수
+    const totalLengthMM = lengthMM * imageList.length;
+
+    console.log(`[Xprinter GDI v1.0] Paper: ${widthMM}mm × ${totalLengthMM}mm, Segments: ${imageList.length}`);
+
+    const psScript = `
+try {
+  Add-Type -AssemblyName System.Drawing
+  $pd = New-Object System.Drawing.Printing.PrintDocument
+  $pd.PrinterSettings.PrinterName = '${safePrinter}'
+  $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController
+
+  # Xprinter: 실제 용지 폭 = 리본 폭 (M105처럼 A4 고정이 아님)
+  $widthUnits = [int](${widthMM} / 25.4 * 100)
+  $totalLengthUnits = [int](${totalLengthMM} / 25.4 * 100)
+  $customPaper = New-Object System.Drawing.Printing.PaperSize("ThermalRibbon", $widthUnits, $totalLengthUnits)
+  $customPaper.RawKind = 256
+
+  $pd.DefaultPageSettings.PaperSize = $customPaper
+  $pd.DefaultPageSettings.Landscape = $false
+  $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)
+
+  $images = @(${imageList.map(img => `'${img.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`).join(',')})
+
+  $pd.Add_PrintPage({
+    param($sender, $e)
+    $g = $e.Graphics
+    $g.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
+
+    $currentY = 0
+    foreach ($path in $images) {
+      if (Test-Path $path) {
+        $img = [System.Drawing.Image]::FromFile($path)
+        # Xprinter: X=0 부터 전체 폭 사용 (M105의 Margin-as-Center와 다름)
+        $destRect = New-Object System.Drawing.RectangleF(0, $currentY, ${widthMM}, ${lengthMM})
+        $g.DrawImage($img, $destRect)
+
+        # 멀티 세그먼트 중간선
+        if ($path -eq $images[0] -and $images.Count -gt 1) {
+          $lineY = $currentY + ${lengthMM}
+          $blackPen = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 1)
+          $g.DrawLine($blackPen, 0, $lineY, ${widthMM}, $lineY)
+        }
+
+        $currentY += ${lengthMM}
+        $img.Dispose()
+      }
+    }
+    $e.HasMorePages = $false
+  })
+
+  $pd.Print()
+  $pd.Dispose()
+  Write-Output "GDI_XPRINTER_SUCCESS"
+} catch {
+  Write-Output "GDI_XPRINTER_ERROR: $($_.Exception.Message)"
+}
+`;
+
+    const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript]);
+    let stdout = '';
+    let stderr = '';
+
+    ps.stdout.on('data', d => {
+      const txt = d.toString();
+      stdout += txt;
+      console.log(`[Xprinter GDI] ${txt.trim()}`);
+    });
+    ps.stderr.on('data', d => { stderr += d.toString(); });
+
+    ps.on('close', code => {
+      if (code === 0 && stdout.includes('GDI_XPRINTER_SUCCESS')) {
+        resolve();
+      } else {
+        const errMsg = stderr.trim() || stdout.trim() || `Xprinter GDI exit code ${code}`;
+        console.error(`[Xprinter GDI Error] ${errMsg}`);
         reject(new Error(errMsg));
       }
     });

@@ -885,6 +885,11 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             if (prev && res.data.find((p: any) => p.name === prev)) return prev;
             return res.data.length > 0 ? res.data[0].name : '';
           });
+          // 선택된 프린터의 타입도 함께 추적
+          setSelectedPrinterType(prev => {
+            const current = res.data.find((p: any) => p.name === prev) || res.data[0];
+            return current?.type || 'generic';
+          });
         }
       })
       .catch(() => {});
@@ -954,7 +959,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   // Printer State
   const [printers, setPrinters] = useState<any[]>([]);
   const [selectedPrinter, setSelectedPrinter] = useState('');
+  const [selectedPrinterType, setSelectedPrinterType] = useState<'epson_m105' | 'xprinter' | 'generic'>('epson_m105');
   const [isPrinting, setIsPrinting] = useState(false);
+
+  // Xprinter: 최대 인쇄폭 108mm → width ≤ 105mm 프리셋만 표시
+  const availablePresets = selectedPrinterType === 'xprinter'
+    ? RIBBON_TYPES.filter(t => t.width <= 105)
+    : RIBBON_TYPES;
 
   // User Print Settings
   const [printTarget, setPrintTarget] = useState<'both' | 'left' | 'right'>('both');
@@ -1293,8 +1304,11 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               media_type: mediaType,
               cutting_margin_mm: mediaType === 'roll' ? cuttingMargin : 0,
               print_quality: printQuality,
-              // [수정] 기점(Base) + 사용자 보정치(Delta)를 합쳐서 절대 좌표로 전달
-              margin_offset_mm: (RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset
+              // Xprinter: marginOffset 불필요 (용지=리본폭, X=0 전체폭 인쇄)
+              // M105: 기존 Margin-as-Center 공식 유지
+              margin_offset_mm: selectedPrinterType === 'xprinter'
+                ? 0
+                : (RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset
             }),
             signal: controller.signal
           });
@@ -1606,13 +1620,33 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="flex gap-2">
             <select 
               value={selectedPrinter} 
-              onChange={e => setSelectedPrinter(e.target.value)}
+              onChange={e => {
+                setSelectedPrinter(e.target.value);
+                const p = printers.find((p: any) => p.name === e.target.value);
+                const newType = p?.type || 'generic';
+                setSelectedPrinterType(newType);
+                // Xprinter 전환 시: 현재 프리셋이 105mm 초과면 첫 번째 호환 프리셋으로 자동 변경
+                if (newType === 'xprinter') {
+                  const currentPreset = RIBBON_TYPES.find(t => t.id === ribbonType);
+                  if (currentPreset && currentPreset.width > 105) {
+                    const first = RIBBON_TYPES.filter(t => t.width <= 105)[0];
+                    if (first) {
+                      setRibbonType(first.id);
+                      setWidth(first.width);
+                      setLength(first.length);
+                      setLace(first.lace || 0);
+                      setMarginTop(first.marginTop || 0);
+                      setMarginBottom(first.marginBottom || 0);
+                    }
+                  }
+                }
+              }}
               className="flex-1 p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2 ring-blue-500/50"
             >
               {printers.length === 0 && <option value="">☁️ 매장 기본 프린터로 원격 전송</option>}
               {printers.map((p: any) => (
                 <option key={p.name} value={p.name}>
-                  {p.brand === 'epson' ? '🟢' : p.brand === 'hp' ? '🔵' : '⚪'} {p.name} {p.status === 'Ready' ? '✅' : '⚠️'}
+                  {p.type === 'xprinter' ? '🏷️' : p.brand === 'epson' ? '🟢' : p.brand === 'hp' ? '🔵' : '⚪'} {p.name} {p.status === 'Ready' ? '✅' : '⚠️'}
                 </option>
               ))}
             </select>
@@ -1647,11 +1681,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         {/* 2. 하드웨어 규격 (프리셋, 폭, 길이) */}
         <div className="space-y-4">
           <div>
-            <label className="text-xs text-slate-400 block mb-1 font-bold">리본 프리셋</label>
+            <label className="text-xs text-slate-400 block mb-1 font-bold">
+              리본 프리셋 {selectedPrinterType === 'xprinter' && <span className="text-amber-400 text-[10px] ml-1">🏷️ Xprinter (≤105mm)</span>}
+            </label>
             <select 
               value={ribbonType} 
               onChange={e => {
-                const selected = RIBBON_TYPES.find(t => t.id === e.target.value);
+                const presets = selectedPrinterType === 'xprinter' ? availablePresets : RIBBON_TYPES;
+                const selected = presets.find(t => t.id === e.target.value);
                 if (selected) {
                   setRibbonType(selected.id);
                   setWidth(selected.width);
@@ -1663,7 +1700,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               }}
               className="w-full p-2 rounded-lg text-sm bg-slate-800 border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {RIBBON_TYPES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {availablePresets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
