@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { create } from 'zustand';
 import { toPng } from 'html-to-image';
 import { 
   Printer, 
@@ -856,7 +857,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = '23.1';
+const REQUIRED_BRIDGE_VERSION = '25.0';
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);

@@ -1,6 +1,6 @@
 try {
     Write-Host "==============================================" -ForegroundColor Cyan
-    Write-Host "   RibbonBridge Universal Builder v23.1" -ForegroundColor White
+    Write-Host "   RibbonBridge Universal Builder v25.0" -ForegroundColor White
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
 
