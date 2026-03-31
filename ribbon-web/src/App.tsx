@@ -826,7 +826,7 @@ const RibbonCanvas = ({
         </div>
 
         {/* --- SHOP LOGO INJECTION --- */}
-        {printLogo && shopLogoBase64 && (
+        {printLogo && shopLogo && (
             <div 
               className="absolute left-0 right-0 flex justify-center items-center pointer-events-none"
               style={{
@@ -838,7 +838,8 @@ const RibbonCanvas = ({
               }}
             >
                <img 
-                 src={shopLogoBase64} 
+                 src={shopLogo} 
+                 crossOrigin="anonymous"
                  alt="Logo" 
                  style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 1 }} 
                />
@@ -855,7 +856,7 @@ const RibbonCanvas = ({
 // ==========================================
 import type { Session } from '@supabase/supabase-js';
 
-const REQUIRED_BRIDGE_VERSION = '15.7';
+const REQUIRED_BRIDGE_VERSION = '23.0';
 export default function App({ session, isAdmin, onShowAdmin }: { session?: Session; isAdmin?: boolean; onShowAdmin?: () => void }) {
   const mainRef = useRef<HTMLElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -983,7 +984,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     hj: 'font-chosun',
     sym: 'font-noto-sans'
   });
-  const [leftRatioX, setLeftRatioX] = useState(100);
+  const [leftRatioX, setLeftRatioX] = useState(90);
   const [leftRatioY, setLeftRatioY] = useState(100);
   const [leftRotated, setLeftRotated] = useState<Set<string>>(new Set());
 
@@ -997,7 +998,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     hj: 'font-chosun',
     sym: 'font-noto-sans'
   });
-  const [rightRatioX, setRightRatioX] = useState(100);
+  const [rightRatioX, setRightRatioX] = useState(90);
   const [rightRatioY, setRightRatioY] = useState(100);
   const [rightRotated, setRightRotated] = useState<Set<string>>(new Set());
   const [rightSpacing, setRightSpacing] = useState(0); // 0 = auto
@@ -1025,28 +1026,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
   // Shop Logo State
   const [shopLogo, setShopLogo] = useState<string | null>(null);
-  const [shopLogoBase64, setShopLogoBase64] = useState<string | null>(null);
   const [printLogo, setPrintLogo] = useState<boolean>(false);
-
-  // Eagerly cache Shop Logo to Base64 to bypass html2canvas CORS bugs
-  useEffect(() => {
-    if (!shopLogo) {
-      setShopLogoBase64(null);
-      return;
-    }
-    if (shopLogo.startsWith('data:')) {
-      setShopLogoBase64(shopLogo);
-      return;
-    }
-    fetch(shopLogo)
-      .then(res => res.blob())
-      .then(blob => {
-        const reader = new FileReader();
-        reader.onloadend = () => setShopLogoBase64(reader.result as string);
-        reader.readAsDataURL(blob);
-      })
-      .catch(err => console.warn('Logo pre-fetch failed:', err));
-  }, [shopLogo]);
 
   // Panning State
   const [isDragging, setIsDragging] = useState(false);
@@ -1422,26 +1402,17 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     }
   }, [isSidebarOpen]); // Re-fit when side panel toggles
 
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const CURRENT_TARGET_VERSION = "15.6";
-
   useEffect(() => {
     const checkBridge = async () => {
       try {
         const res = await fetch('http://127.0.0.1:8000/api/version', { mode: 'cors' });
         if (res.ok) {
            const data = await res.json();
-           if (data.version !== CURRENT_TARGET_VERSION) {
-              console.log("[Bridge] Version mismatch:", data.version, "!==", CURRENT_TARGET_VERSION);
-              // setShowUpdateModal(true); // 알림 방지를 위해 주석 처리
+           if (data.status === 'success' && data.version !== REQUIRED_BRIDGE_VERSION) {
+              console.log("[Bridge] Version mismatch:", data.version, "!==", REQUIRED_BRIDGE_VERSION);
            }
-        } else {
-           // Not OK but reachable - might be very old version
-           // setShowUpdateModal(true); // 알림 방지를 위해 주석 처리
         }
       } catch (e) {
-        // Can't connect - either not running or very old bridge
-        // We'll only show if they try to print or after a delay?
         console.log("[Bridge] Could not check version. Might be offline or very old.");
       }
     };
@@ -2303,14 +2274,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       </div>
 
       {/* Update Notification Modal */}
-      {showUpdateModal && (
+      {isUpdateModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[300] animate-in fade-in duration-300">
           <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-8 max-w-lg w-full mx-4 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"></div>
             
             <div className="text-5xl mb-6">🚀</div>
-            <h2 className="text-2xl font-bold text-white mb-2">최신 인쇄 브릿지 필수 설치 [v15.6]</h2>
-            <p className="text-amber-400 font-medium mb-4">새로운 고성능 가변 길이 엔진(v15.6)이 출시되었습니다!</p>
+            <h2 className="text-2xl font-bold text-white mb-2">최신 인쇄 브릿지 필수 설치 [v{REQUIRED_BRIDGE_VERSION}]</h2>
+            <p className="text-amber-400 font-medium mb-4">새로운 고성능 가변 길이 엔진(v{REQUIRED_BRIDGE_VERSION})이 출시되었습니다!</p>
             
             <div className="bg-slate-800/50 rounded-2xl p-4 text-left mb-6 border border-slate-700">
               <ul className="text-sm text-slate-300 space-y-2">
@@ -2324,14 +2295,18 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
             <div className="flex flex-col gap-3">
               <a 
-                href="/RibbonBridge_v15_6.zip" 
+                href={`/RibbonBridge_v${REQUIRED_BRIDGE_VERSION.replace('.', '_')}.zip`} 
                 download
                 className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98]"
               >
-                📥 v15.6 최신 리본 브릿지 다운로드
+                📥 v{REQUIRED_BRIDGE_VERSION} 최신 리본 브릿지 다운로드
               </a>
               <button 
-                onClick={() => setShowUpdateModal(false)}
+                onClick={() => {
+                  setIsUpdateModalOpen(false);
+                  setHasDismissedUpdate(true);
+                  sessionStorage.setItem('bridge_update_dismissed', 'true');
+                }}
                 className="text-slate-500 hover:text-slate-300 text-sm py-2"
               >
                 다음에 할게요 (기능이 제한될 수 있습니다)
