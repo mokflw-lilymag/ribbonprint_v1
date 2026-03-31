@@ -2295,11 +2295,11 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
             <div className="flex flex-col gap-3">
               <a 
-                href={`/RibbonBridge_v${REQUIRED_BRIDGE_VERSION.replace('.', '_')}.zip`} 
+                href={`/RibbonBridge_Setup_v${REQUIRED_BRIDGE_VERSION.replace('.', '_')}.exe`} 
                 download
                 className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98]"
               >
-                📥 v{REQUIRED_BRIDGE_VERSION} 최신 리본 브릿지 다운로드
+                📥 v{REQUIRED_BRIDGE_VERSION} 최신 리본 브릿지 설치하기
               </a>
               <button 
                 onClick={() => {
