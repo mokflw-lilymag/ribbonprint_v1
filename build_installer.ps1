@@ -59,7 +59,7 @@ try {
 
     # 6. Deploy to Web Public
     Write-Host "[6] Deploying to Web Directory..." -ForegroundColor Yellow
-    $publicDir = "ribbon-web\public"
+    $publicDir = "d:\mapp\florasync-saas\public"
     if (-not (Test-Path $publicDir)) { New-Item -ItemType Directory -Path $publicDir | Out-Null }
     Copy-Item "RibbonBridge_Setup_v25_0.exe" -Destination "$publicDir\RibbonBridge_Setup_v25_0.exe" -Force
     
