@@ -20,11 +20,15 @@ const FONT_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
 const isPkg = typeof process.pkg !== 'undefined';
 const BASE_DIR = isPkg ? path.dirname(process.execPath) : __dirname;
 
-// ─── Printer Type Detection ────────────────────────────────────
+// ─── Printer Type Detection ──────────────────────────────────────────────
 function detectPrinterType(driverName, printerName) {
   const combined = ((driverName || '') + ' ' + (printerName || '')).toLowerCase();
-  if (combined.includes('xprinter') || combined.includes('xp-dt') || combined.includes('xp-tt')) return 'xprinter';
+  // 1순위: EPSON M시리즈 우선 감지 (Xprinter 보다 먼저 체크)
   if (combined.includes('epson') && (combined.includes('m1') || combined.includes('m-1'))) return 'epson_m105';
+  // 2순위: Xprinter
+  if (combined.includes('xprinter') || combined.includes('xp-dt') || combined.includes('xp-tt')) return 'xprinter';
+  // 3순위: EPSON L시리즈 (잉크젯 L210, L380 등)
+  if (combined.includes('epson') && / l\d/i.test(combined)) return 'epson_l_series';
   return 'generic';
 }
 
@@ -39,23 +43,22 @@ const app = express();
 // ─── Final Hardened CORS & PNA (Private Network Access) Middleware ───
 app.use((req, res, next) => {
   const origin = req.headers.origin || '*';
-  
+
   // Standard CORS headers
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Access-Control-Allow-Private-Network');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  
-  // Special PNA (Private Network Access) Headder Handling
-  if (req.headers['access-control-request-private-network']) {
-    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 캐시 시간 설정 (24시간)
+
+  // [Crucial] Force PNA header for ALL requests to satisfy strict Chrome security
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+
+  // Preflight (OPTIONS) request - Chrome prefers 200 OK for PNA
+  if (req.method === 'OPTIONS') {
+    return res.status(200).send();
   }
 
-  // Preflight (OPTIONS) request termination
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  
   next();
 });
 
@@ -76,9 +79,9 @@ console.log(`> Temp Dir : ${TMP_DIR}`);
 // ─── Routes ════════════════════════════════════════════════════
 
 app.get('/', (_req, res) => {
-  res.json({ 
-    status: 'ok', 
-    version: VERSION, 
+  res.json({
+    status: 'ok',
+    version: VERSION,
     engine: 'GDI v14.0 (Single-Page Master | User Calibrated)',
     features: [
       'Absolute Center-point Alignment',
@@ -115,11 +118,15 @@ app.get('/api/printers', (_req, res) => {
       else if (p.PrinterStatus & 0x00000010) statusStr = 'Paper Out';
       else if (p.PrinterStatus !== 0) statusStr = 'Busy/Other';
 
+      const pType = detectPrinterType(p.DriverName, p.Name);
       return {
         name: p.Name,
         status: statusStr,
         driver: p.DriverName || '',
-        type: detectPrinterType(p.DriverName, p.Name)
+        type: pType,
+        // 엔손 M시리즈 + L시리즈 모두 'epson' 브랜드
+        brand: (pType === 'epson_m105' || pType === 'epson_l_series') ? 'epson' : (pType === 'xprinter' ? 'xprinter' : 'generic'),
+        engine: pType === 'xprinter' ? 'XPrint GDI Engine' : 'GDI Variable Height Engine'
       };
     });
     return res.json({ status: 'success', data });
@@ -230,7 +237,9 @@ async function executePrintJob(job) {
       console.log(`[Engine] Routing to Xprinter GDI Engine (Direct-Width/Centered)`);
       await printViaGDI_Xprinter(job.printer, localPaths, width, length, cut, margin);
     } else {
-      console.log(`[Engine] Routing to Epson M105 GDI Engine (Margin-as-Center)`);
+      // M105 + L시리즈 (L210 등) + generic 모두 동일 GDI 엔진 사용 (엔손 잌크젠 방식 동일)
+      const engineLabel = /epson l\d/i.test(job.printer) ? 'Epson L-Series' : 'Epson M105/Generic';
+      console.log(`[Engine] Routing to ${engineLabel} GDI Engine (Margin-as-Center)`);
       await printViaGDI(job.printer, localPaths, width, length, margin, cut, mediaType);
     }
 
@@ -265,11 +274,11 @@ function printViaGDI(printerName, images, widthMM, lengthMM, leftMarginMM, cutti
   return new Promise((resolve, reject) => {
     const imageList = Array.isArray(images) ? images : [images];
     const safePrinter = printerName.replace(/'/g, "''");
-    
+
     // 1. 배너 통합 길이 계산 (리본들의 순수 합 + 맨 마지막 절단 여백 1회)
     // 컷리본이나 물리버튼 에러 완화를 위해, 약간의 버퍼 길이를 확보해줄 수도 있지만 일단 수학적 길이를 유지합니다
     const totalLengthMM = (lengthMM * imageList.length) + cuttingMarginMM;
-    
+
     // Coordinate logic: (UserMargin - width/2)
     // This centers the ribbon image on the printer's fixed physical center guide (specified by userMargin).
     const finalX = leftMarginMM - (widthMM / 2);
@@ -349,7 +358,7 @@ $pd.Add_PrintPage({
     let stdout = '';
     let stderr = '';
 
-    ps.stdout.on('data', d => { 
+    ps.stdout.on('data', d => {
       const txt = d.toString();
       stdout += txt;
       console.log(`[GDI Server] ${txt.trim()}`);
@@ -481,11 +490,11 @@ app.get('/api/fonts/file/:fn', (req, res) => {
 });
 
 // ─── Robust Server Launch ──────────────────────────────────────
-const server = app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('╔══════════════════════════════════════════════════╗');
-  console.log(`║      RibbonBridge v${VERSION} — (Stable) at PORT ${PORT}    ║`);
+  console.log(`║      RibbonBridge v${VERSION} — (Global) at PORT ${PORT}    ║`);
   console.log('╚══════════════════════════════════════════════════╝');
-  console.log(`\n> 🚀 RibbonBridge v${VERSION} (Stable Mode) at http://localhost:${PORT}\n`);
+  console.log(`\n> 🚀 RibbonBridge v${VERSION} (Global Mode) at http://localhost:${PORT}\n`);
 });
 
 // Port in Use Handler
@@ -493,7 +502,7 @@ server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {
     console.error(`[CRITICAL] Port ${PORT} already in use. Please close other bridge versions.`);
     // In production, we might want to kill the conflicting process, but usually better to log clearly.
-    setTimeout(() => process.exit(1), 5000); 
+    setTimeout(() => process.exit(1), 5000);
   }
 });
 

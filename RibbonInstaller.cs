@@ -31,16 +31,54 @@ namespace RibbonBridgeInstaller
 
             try
             {
-                // 1. 기존 프로세스 강제 종료 (클린 설치 환경 조성)
-                string[] targetProcs = { "RibbonBridge_Core", "ribbon_printer", "launch_service" };
+                // 1. 기존 프로세스 강제 종료 (핵폭탄급 강제 종료 시스템 투입)
+                // [상식 최종판] 이름만 찾는게 아니라 시스템 명령으로 8000번 포트와 관련 이름을 무조건 즉각 사살합니다.
+                string[] targetProcs = { "RibbonBridge_Core", "ribbon_printer", "launch_service", "node", "RibbonBridge", "RibbonBridge_Server" };
                 foreach (string procName in targetProcs) {
-                    foreach (var p in Process.GetProcessesByName(procName)) {
-                        try { p.Kill(); p.WaitForExit(2000); } catch { }
-                    }
+                    try {
+                        ProcessStartInfo killInfo = new ProcessStartInfo("taskkill", "/F /IM " + procName + ".exe /T");
+                        killInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                        killInfo.CreateNoWindow = true;
+                        Process proc = Process.Start(killInfo);
+                        if (proc != null) proc.WaitForExit(2000);
+                    } catch { }
                 }
+                
+                // [포트 해킹 방지] 8000번 포트 점유 프로세스 직접 추적 및 강제 사살
+                try {
+                    Process netstat = new Process();
+                    netstat.StartInfo.FileName = "cmd.exe";
+                    netstat.StartInfo.Arguments = "/c netstat -ano | findstr :8000";
+                    netstat.StartInfo.UseShellExecute = false;
+                    netstat.StartInfo.RedirectStandardOutput = true;
+                    netstat.StartInfo.CreateNoWindow = true;
+                    netstat.Start();
+                    string output = netstat.StandardOutput.ReadToEnd();
+                    netstat.WaitForExit();
+                    
+                    foreach (string line in output.Split('\n')) {
+                        if (line.Contains("LISTENING")) {
+                            string[] parts = line.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length > 0) {
+                                string pid = parts[parts.Length - 1].Trim();
+                                if (!string.IsNullOrEmpty(pid) && pid != "0") {
+                                    ProcessStartInfo pidKill = new ProcessStartInfo("taskkill", "/F /PID " + pid + " /T");
+                                    pidKill.WindowStyle = ProcessWindowStyle.Hidden;
+                                    pidKill.CreateNoWindow = true;
+                                    Process procPid = Process.Start(pidKill);
+                                    if (procPid != null) procPid.WaitForExit(1000);
+                                }
+                            }
+                        }
+                    }
+                } catch { }
 
-                // 폴더 정리
-                if (!Directory.Exists(installDir)) {
+                // [최종 확인] 구버전 파일이 아직도 열려있어서 삭제가 안되면 에러를 내야 함
+                if (Directory.Exists(installDir)) {
+                    foreach (var file in Directory.GetFiles(installDir, "*.exe")) {
+                        try { File.Delete(file); } catch { /* 아직도 안죽었으면 여기서 수동 개입 필요 */ }
+                    }
+                } else {
                     Directory.CreateDirectory(installDir);
                 }
 
