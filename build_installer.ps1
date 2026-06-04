@@ -52,6 +52,7 @@ try {
         "/r:System.IO.Compression.dll",
         "/r:System.IO.Compression.FileSystem.dll",
         "/r:System.Windows.Forms.dll",
+        "/r:System.Drawing.dll",
         "RibbonInstaller.cs"
     )
     Start-Process -FilePath $csc -ArgumentList $cscInstallerArgs -NoNewWindow -Wait
@@ -59,7 +60,7 @@ try {
 
     # 6. Deploy to Web Public
     Write-Host "[6] Deploying to Web Directory..." -ForegroundColor Yellow
-    $publicDir = "d:\mapp\florasync-saas\public"
+    $publicDir = "D:\lilymagerp-v4_supa\public"
     if (-not (Test-Path $publicDir)) { New-Item -ItemType Directory -Path $publicDir | Out-Null }
     Copy-Item "RibbonBridge_Setup_v25_0.exe" -Destination "$publicDir\RibbonBridge_Setup_v25_0.exe" -Force
     

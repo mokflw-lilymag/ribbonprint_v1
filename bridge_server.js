@@ -106,7 +106,7 @@ app.get('/api/version', (req, res) => {
 // 프린터 목록
 app.get('/api/printers', (_req, res) => {
   try {
-    const cmd = `powershell -NoProfile -Command "Get-Printer | Select-Object Name,PrinterStatus,DriverName | ConvertTo-Json -Compress"`;
+    const cmd = `powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Printer | Select-Object Name,PrinterStatus,DriverName | ConvertTo-Json -Compress"`;
     const raw = execSync(cmd, { timeout: 10000, encoding: 'utf8' });
     let list = JSON.parse(raw || '[]');
     if (!Array.isArray(list)) list = [list];

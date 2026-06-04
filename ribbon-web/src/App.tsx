@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { toPng } from 'html-to-image';
-import { 
-  Printer, 
+import {
+  Printer,
   Type,
   Maximize2,
   Minimize2,
@@ -80,7 +80,7 @@ async function embedActiveFontsIntoElement(element: HTMLElement) {
   }
 
   const activeFontFaces: string[] = [];
-  
+
   // Find only the relevant @font-face rules
   for (const sheet of Array.from(document.styleSheets)) {
     try {
@@ -147,13 +147,13 @@ const FONTS: FontItem[] = [
   { value: 'font-dokdo', name: '독도체', langs: ['ko', 'en', 'sym'], preview: '동해물과 백두산이' },
   { value: 'font-gungsuh', name: '궁서체 (기본)', langs: ['ko', 'hj', 'en', 'sym'], preview: '궁서체 기본' },
   { value: 'font-chosun', name: '조선 궁서체', langs: ['ko', 'hj', 'en', 'sym'], preview: '祝發展 謹弔 (조선궁서)' },
-  
+
   // 명조/세리프
   { value: 'font-noto-serif', name: 'Noto Serif (명조)', langs: ['ko', 'hj', 'en', 'sym'], preview: '단정한 명조체' },
   { value: 'font-nanum-myeongjo', name: '나눔명조', langs: ['ko', 'hj', 'en', 'sym'], preview: '나눔명조체' },
   { value: 'font-song', name: '송명체', langs: ['ko', 'hj', 'en', 'sym'], preview: '송명체 테스트' },
   { value: 'font-gowun', name: '고운바탕', langs: ['ko', 'hj', 'en', 'sym'], preview: '고운바탕체' },
-  
+
   // 고딕/산세리프
   { value: 'font-noto-sans', name: 'Noto Sans (고딕)', langs: ['ko', 'hj', 'en', 'sym'], preview: '깔끔한 고딕체' },
   { value: 'font-nanum-gothic', name: '나눔고딕', langs: ['ko', 'hj', 'en', 'sym'], preview: '나눔고딕체' },
@@ -164,12 +164,12 @@ function FontSelector({ value, onChange, mode, fonts }: { value: string, onChang
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [hoveredFont, setHoveredFont] = useState<string | null>(null);
-  
+
   const filteredFonts = useMemo(() => {
-    return fonts.filter(f => 
-      f.langs.includes(mode) && 
-      (f.name.toLowerCase().includes(search.toLowerCase()) || 
-       f.value.toLowerCase().includes(search.toLowerCase()))
+    return fonts.filter(f =>
+      f.langs.includes(mode) &&
+      (f.name.toLowerCase().includes(search.toLowerCase()) ||
+        f.value.toLowerCase().includes(search.toLowerCase()))
     );
   }, [fonts, mode, search]);
 
@@ -177,57 +177,57 @@ function FontSelector({ value, onChange, mode, fonts }: { value: string, onChang
 
   return (
     <div className="relative w-full text-left font-sans">
-      <button 
+      <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between bg-slate-900 text-white rounded-lg p-2 text-sm border border-slate-700 outline-none hover:bg-slate-800 transition shadow-sm"
       >
         <span className={cn(selectedFont.value, "text-[15px]")}>{selectedFont.name}</span>
         <ChevronDown className="w-4 h-4 text-slate-400" />
       </button>
-      
+
       {open && (
         <div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl overflow-hidden flex flex-col">
           <div className="flex items-center px-3 border-b border-slate-700 bg-slate-800/50">
-             <Search className="w-4 h-4 text-slate-400" />
-             <input 
-               type="text" 
-               className="w-full bg-transparent border-none outline-none p-2.5 text-sm text-white placeholder:text-slate-500 font-sans" 
-               placeholder="폰트 검색..."
-               value={search}
-               onChange={e => setSearch(e.target.value)}
+            <Search className="w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              className="w-full bg-transparent border-none outline-none p-2.5 text-sm text-white placeholder:text-slate-500 font-sans"
+              placeholder="폰트 검색..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
             />
           </div>
           <div className="max-h-[300px] overflow-y-auto p-1.5 flex flex-col gap-1">
-             {filteredFonts.length === 0 && <div className="py-6 text-center text-sm text-slate-500 font-sans">폰트를 찾을 수 없습니다.</div>}
-             {filteredFonts.map(f => (
-               <button
-                 key={f.value}
-                 onMouseEnter={() => setHoveredFont(f.value)}
-                 onMouseLeave={() => setHoveredFont(null)}
-                 onClick={() => { onChange(f.value); setOpen(false); setSearch(""); setHoveredFont(null); }}
-                 className={cn(
-                   "flex flex-col text-left px-3 py-3 rounded hover:bg-slate-700 transition-colors cursor-pointer w-full group border-b border-slate-700/50 last:border-0",
-                   f.value === value ? "bg-blue-900/40" : ""
-                 )}
-               >
-                 <div className="flex w-full items-center justify-between">
-                   <div className="flex flex-col w-full pr-2">
-                     <span className={cn(
-                       (f.value === value || hoveredFont === f.value) ? f.value : "font-sans", 
-                       "text-[26px] text-white leading-tight mb-1 group-hover:text-blue-300 transition-colors"
-                     )}>
-                       {f.preview}
-                     </span>
-                     <span className="text-[12px] text-slate-400 font-sans">{f.name}</span>
-                   </div>
-                   {f.value === value && <Check className="w-5 h-5 text-blue-400 shrink-0" />}
-                 </div>
-               </button>
-             ))}
+            {filteredFonts.length === 0 && <div className="py-6 text-center text-sm text-slate-500 font-sans">폰트를 찾을 수 없습니다.</div>}
+            {filteredFonts.map(f => (
+              <button
+                key={f.value}
+                onMouseEnter={() => setHoveredFont(f.value)}
+                onMouseLeave={() => setHoveredFont(null)}
+                onClick={() => { onChange(f.value); setOpen(false); setSearch(""); setHoveredFont(null); }}
+                className={cn(
+                  "flex flex-col text-left px-3 py-3 rounded hover:bg-slate-700 transition-colors cursor-pointer w-full group border-b border-slate-700/50 last:border-0",
+                  f.value === value ? "bg-blue-900/40" : ""
+                )}
+              >
+                <div className="flex w-full items-center justify-between">
+                  <div className="flex flex-col w-full pr-2">
+                    <span className={cn(
+                      (f.value === value || hoveredFont === f.value) ? f.value : "font-sans",
+                      "text-[26px] text-white leading-tight mb-1 group-hover:text-blue-300 transition-colors"
+                    )}>
+                      {f.preview}
+                    </span>
+                    <span className="text-[12px] text-slate-400 font-sans">{f.name}</span>
+                  </div>
+                  {f.value === value && <Check className="w-5 h-5 text-blue-400 shrink-0" />}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       )}
-      
+
       {open && <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />}
     </div>
   );
@@ -407,7 +407,7 @@ const parseRibbonLine = (text: string, baseId: string, rotatedIds: Set<string>):
     } else {
       // default all to standing (false), rotate only if user clicked (id exists in rotatedIds)
       const isRotated = rotatedIds.has(id);
-      
+
       nodes.push({ type: 'char', content: raw, id, isRotated });
     }
   }
@@ -449,7 +449,7 @@ interface RibbonCanvasProps {
   scaleRatio: number; // rendering scale
   zoom: number;      // current zoom level to compensate UI scale
   spacing: number;   // manual gap percentage (0 = auto/spread)
-  side?: 'left' | 'right'; 
+  side?: 'left' | 'right';
   isActive?: boolean;
   onClick?: () => void;
   isPrintMode?: boolean;
@@ -458,8 +458,8 @@ interface RibbonCanvasProps {
   printLogo?: boolean;
 }
 
-const RibbonCanvas = ({ 
-  text, fontConfig, ratioX, ratioY, width, lace, length, marginTop, marginBottom, 
+const RibbonCanvas = ({
+  text, fontConfig, ratioX, ratioY, width, lace, length, marginTop, marginBottom,
   rotatedIds, onCharClick, scaleRatio, zoom, spacing, side = 'left', isActive, onClick, isPrintMode = false, marginOffset: _marginOffset = 0,
   shopLogo = null, printLogo = false
 }: RibbonCanvasProps) => {
@@ -478,7 +478,7 @@ const RibbonCanvas = ({
   const fontScaleX = scaleYObj === 0 ? 1 : scaleXObj / scaleYObj;
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className={cn(
         "relative flex justify-center transition-all duration-300",
@@ -493,7 +493,7 @@ const RibbonCanvas = ({
       {/* Visual Ruler Outside the Ribbon */}
       {!isPrintMode && (
         <>
-          <div 
+          <div
             className={cn(
               "absolute top-0 bottom-0 flex flex-col justify-between font-mono py-1 z-10 pointer-events-none",
               side === 'left' ? "items-end pr-2" : "items-start pl-2"
@@ -504,50 +504,50 @@ const RibbonCanvas = ({
               [side === 'left' ? 'marginRight' : 'marginLeft']: `${20 / zoom}px`
             }}
           >
-            <span style={{ transform: `scale(${1/zoom})`, transformOrigin: side === 'left' ? 'right top' : 'left top', fontSize: '14px', color: '#94a3b8', fontWeight: 'bold' }}>0</span>
-            <div style={{ width: `${1/zoom}px` }} className={cn("h-full bg-gray-500/50 absolute top-0 bottom-0", side === 'left' ? "right-0" : "left-0")}></div>
-            <span style={{ transform: `scale(${1/zoom})`, transformOrigin: side === 'left' ? 'right bottom' : 'left bottom', fontSize: '14px', color: '#94a3b8', fontWeight: 'bold' }}>{length}</span>
+            <span style={{ transform: `scale(${1 / zoom})`, transformOrigin: side === 'left' ? 'right top' : 'left top', fontSize: '14px', color: '#94a3b8', fontWeight: 'bold' }}>0</span>
+            <div style={{ width: `${1 / zoom}px` }} className={cn("h-full bg-gray-500/50 absolute top-0 bottom-0", side === 'left' ? "right-0" : "left-0")}></div>
+            <span style={{ transform: `scale(${1 / zoom})`, transformOrigin: side === 'left' ? 'right bottom' : 'left bottom', fontSize: '14px', color: '#94a3b8', fontWeight: 'bold' }}>{length}</span>
           </div>
 
           {/* Margins Indicators Outside the Ribbon */}
-          <div 
+          <div
             className={cn("absolute border-red-500/70 z-20 pointer-events-none", side === 'left' ? "right-full" : "left-full")}
-            style={{ 
+            style={{
               top: `${marginTop * scaleRatio}px`,
-              borderTopWidth: `${1/zoom}px`,
+              borderTopWidth: `${1 / zoom}px`,
               borderTopStyle: 'dashed',
               width: `${120 / zoom}px`, // Constant line length on screen
               [side === 'left' ? 'marginRight' : 'marginLeft']: '0px'
             }}
           >
-            <span 
+            <span
               className={cn("absolute text-[14px] text-red-500 font-bold bg-[#0f172a] px-1 whitespace-nowrap", side === 'left' ? "left-0" : "right-0")}
-              style={{ 
-                transform: `scale(${1/zoom})`, 
+              style={{
+                transform: `scale(${1 / zoom})`,
                 transformOrigin: side === 'left' ? 'left bottom' : 'right bottom',
-                bottom: `${0.3/zoom}rem`
+                bottom: `${0.3 / zoom}rem`
               }}
             >
               상단여백 {marginTop}
             </span>
           </div>
 
-          <div 
+          <div
             className={cn("absolute border-red-500/70 z-20 pointer-events-none", side === 'left' ? "right-full" : "left-full")}
-            style={{ 
+            style={{
               bottom: `${marginBottom * scaleRatio}px`,
-              borderBottomWidth: `${1/zoom}px`,
+              borderBottomWidth: `${1 / zoom}px`,
               borderBottomStyle: 'dashed',
               width: `${120 / zoom}px`, // Constant line length on screen
               [side === 'left' ? 'marginRight' : 'marginLeft']: '0px'
             }}
           >
-            <span 
+            <span
               className={cn("absolute text-[14px] text-red-500 font-bold bg-[#0f172a] px-1 whitespace-nowrap", side === 'left' ? "left-0" : "right-0")}
-              style={{ 
-                transform: `scale(${1/zoom})`, 
+              style={{
+                transform: `scale(${1 / zoom})`,
                 transformOrigin: side === 'left' ? 'left top' : 'right top',
-                top: `${0.3/zoom}rem`
+                top: `${0.3 / zoom}rem`
               }}
             >
               하단여백 {marginBottom}
@@ -558,63 +558,63 @@ const RibbonCanvas = ({
 
       {/* Ribbon Body */}
       <div className={cn("relative overflow-hidden flex flex-col items-center", !isPrintMode ? "bg-white ribbon-texture shadow-2xl" : "bg-white")} style={{ width: '100%', height: '100%' }}>
-        
+
         {/* Lace Effects */}
         {!isPrintMode && lace > 0 && (
           <>
             <div className="absolute left-0 top-0 bottom-0 border-r border-[#00000010] flex flex-col overflow-hidden" style={{ width: `${lace * scaleRatio}px` }}>
-               <div className="flex-1 w-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-200/20 to-transparent" style={{ backgroundSize: '4px 4px' }} />
+              <div className="flex-1 w-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-200/20 to-transparent" style={{ backgroundSize: '4px 4px' }} />
             </div>
             <div className="absolute right-0 top-0 bottom-0 border-l border-[#00000010] flex flex-col overflow-hidden" style={{ width: `${lace * scaleRatio}px` }}>
-               <div className="flex-1 w-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-200/20 to-transparent" style={{ backgroundSize: '4px 4px' }} />
+              <div className="flex-1 w-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-200/20 to-transparent" style={{ backgroundSize: '4px 4px' }} />
             </div>
           </>
         )}
 
         {/* Text Container boundaries = exact margins */}
-        <div 
+        <div
           className="absolute left-0 right-0 flex flex-row-reverse justify-center gap-4"
           style={{
             top: `${marginTop * scaleRatio}px`,
             bottom: `${marginBottom * scaleRatio}px`,
-            transform: 'none', 
+            transform: 'none',
           }}
         >
           {lines.map((line, lIdx) => {
             const nodes = parseRibbonLine(line, `L${lIdx}`, rotatedIds);
-            
+
             // Mathematically calculate required height (Full Fit logic)
             const requiredHeight = nodes.reduce((sum, n) => {
-               if (n.type === 'space') return sum + (actualFontSize * 0.7);
+              if (n.type === 'space') return sum + (actualFontSize * 0.7);
 
-               // Buffer and scaling factor for multi-line nodes
-               const nodePadding = (actualFontSize * 0.6); // Increased safety margin
+              // Buffer and scaling factor for multi-line nodes
+              const nodePadding = (actualFontSize * 0.6); // Increased safety margin
 
-               if (n.type === 'split') {
-                 const leftL = n.leftContent?.length || 0;
-                 const rightL = n.rightContent?.length || 0;
-                 if (n.isRotated) {
-                    // Rotated split: single column + 1 space gap + safety margin
-                    return sum + ((leftL + rightL + 1) * actualFontSize * 0.7) + nodePadding;
-                 }
-                 return sum + (Math.max(leftL, rightL) * actualFontSize * 0.7) + nodePadding;
-               }
-               if (n.type === 'bracket') {
-                 return sum + (n.content.length * actualFontSize * 0.7) + nodePadding;
-               }
-               if (n.type === 'fullwidth') {
-                 if (n.isRotated) {
-                   const contentL = n.content.length;
-                   return sum + (contentL * actualFontSize * 0.8) + (actualFontSize * 0.5);
-                 }
-                 return sum + actualFontSize;
-               }
-               return sum + actualFontSize;
+              if (n.type === 'split') {
+                const leftL = n.leftContent?.length || 0;
+                const rightL = n.rightContent?.length || 0;
+                if (n.isRotated) {
+                  // Rotated split: single column + 1 space gap + safety margin
+                  return sum + ((leftL + rightL + 1) * actualFontSize * 0.7) + nodePadding;
+                }
+                return sum + (Math.max(leftL, rightL) * actualFontSize * 0.7) + nodePadding;
+              }
+              if (n.type === 'bracket') {
+                return sum + (n.content.length * actualFontSize * 0.7) + nodePadding;
+              }
+              if (n.type === 'fullwidth') {
+                if (n.isRotated) {
+                  const contentL = n.content.length;
+                  return sum + (contentL * actualFontSize * 0.8) + (actualFontSize * 0.5);
+                }
+                return sum + actualFontSize;
+              }
+              return sum + actualFontSize;
             }, 0);
-            
+
             const gapPX = spacing > 0 ? (actualFontSize * spacing / 100) : 0;
             const totalRequiredHeight = requiredHeight + (nodes.length > 1 ? (nodes.length - 1) * gapPX : 0);
-            
+
             const availableHeight = Math.max(0, (length - marginTop - marginBottom) * scaleRatio);
             let squashRatio = 1;
             if (totalRequiredHeight > availableHeight && availableHeight > 0) {
@@ -622,8 +622,8 @@ const RibbonCanvas = ({
             }
 
             return (
-              <div 
-                key={lIdx} 
+              <div
+                key={lIdx}
                 className="flex flex-col items-center shrink-0 w-max text-black font-semibold whitespace-nowrap"
                 style={{
                   height: squashRatio < 1 ? `${totalRequiredHeight}px` : (spacing === 0 ? '100%' : 'auto'),
@@ -646,49 +646,49 @@ const RibbonCanvas = ({
                   if (node.type === 'fullwidth') {
                     const charFont = fontConfig[getCharType(node.content)];
                     const chars = node.content.split('');
-                    
+
                     // Rotated: single column like bracket
                     if (node.isRotated) {
-                       const blockHeight = chars.length * actualFontSize * 0.8;
-                       return (
-                         <div 
-                           key={node.id} 
-                           className={cn("flex flex-col items-center justify-between shrink-0 py-1 cursor-pointer hover:text-blue-600 transition-colors", charFont)} 
-                           style={{ height: blockHeight + (actualFontSize * 0.5), width: nodeW }}
-                           onClick={() => onCharClick(node.id)}
-                         >
-                           {chars.map((c, i) => (
-                              <span key={i} className={fontConfig[getCharType(c)]} style={{ 
-                                fontSize: `${actualFontSize * 0.80}px`, 
-                                display: 'inline-block',
-                                fontWeight: 'bold',
-                                lineHeight: 1,
-                                transform: `scaleX(${fontScaleX}) rotate(90deg)`
-                              }}>{c}</span>
-                           ))}
-                         </div>
-                       );
+                      const blockHeight = chars.length * actualFontSize * 0.8;
+                      return (
+                        <div
+                          key={node.id}
+                          className={cn("flex flex-col items-center justify-between shrink-0 py-1 cursor-pointer hover:text-blue-600 transition-colors", charFont)}
+                          style={{ height: blockHeight + (actualFontSize * 0.5), width: nodeW }}
+                          onClick={() => onCharClick(node.id)}
+                        >
+                          {chars.map((c, i) => (
+                            <span key={i} className={fontConfig[getCharType(c)]} style={{
+                              fontSize: `${actualFontSize * 0.80}px`,
+                              display: 'inline-block',
+                              fontWeight: 'bold',
+                              lineHeight: 1,
+                              transform: `scaleX(${fontScaleX}) rotate(90deg)`
+                            }}>{c}</span>
+                          ))}
+                        </div>
+                      );
                     }
 
                     // Normal: upright
                     return (
-                      <div 
-                        key={node.id} 
-                        className={cn("flex justify-center items-center shrink-0 cursor-pointer hover:text-blue-600 transition-colors", charFont)} 
+                      <div
+                        key={node.id}
+                        className={cn("flex justify-center items-center shrink-0 cursor-pointer hover:text-blue-600 transition-colors", charFont)}
                         style={{ height: actualFontSize, width: nodeW }}
                         onClick={() => onCharClick(node.id)}
                       >
-                         <div className="flex items-center justify-center" style={{ transform: `scaleX(${fontScaleX})` }}>
-                           {chars.map((c, i) => (
-                             <span key={i} className={fontConfig[getCharType(c)]} style={{ 
-                               fontSize: `${actualFontSize * 0.80}px`, 
-                               display: 'inline-block',
-                               marginLeft: i > 0 ? '-0.20em' : '0',
-                               fontWeight: 'bold',
-                               lineHeight: 1
-                             }}>{c}</span>
-                           ))}
-                         </div>
+                        <div className="flex items-center justify-center" style={{ transform: `scaleX(${fontScaleX})` }}>
+                          {chars.map((c, i) => (
+                            <span key={i} className={fontConfig[getCharType(c)]} style={{
+                              fontSize: `${actualFontSize * 0.80}px`,
+                              display: 'inline-block',
+                              marginLeft: i > 0 ? '-0.20em' : '0',
+                              fontWeight: 'bold',
+                              lineHeight: 1
+                            }}>{c}</span>
+                          ))}
+                        </div>
                       </div>
                     );
                   }
@@ -697,25 +697,25 @@ const RibbonCanvas = ({
                   if (node.type === 'bracket') {
                     const chars = node.content.split('');
                     const blockHeight = chars.length * actualFontSize * 0.7; // increased from 0.65
-                    
+
                     return (
-                      <div 
-                        key={node.id} 
-                        className={cn("flex flex-col items-center shrink-0 leading-none py-1 cursor-pointer hover:text-blue-600 transition-colors", chars.length > 1 ? "justify-between" : "justify-center")} 
-                        style={{ 
-                          height: blockHeight + (actualFontSize * 0.6), 
+                      <div
+                        key={node.id}
+                        className={cn("flex flex-col items-center shrink-0 leading-none py-1 cursor-pointer hover:text-blue-600 transition-colors", chars.length > 1 ? "justify-between" : "justify-center")}
+                        style={{
+                          height: blockHeight + (actualFontSize * 0.6),
                           width: nodeW
                         }}
                         onClick={() => onCharClick(node.id)}
                       >
                         {chars.map((c, i) => (
-                           <span key={i} className={fontConfig[getCharType(c)]} style={{ 
-                             fontSize: `${actualFontSize * 0.7 * (1 + (fontScaleX - 1) * 0.5)}px`, 
-                             lineHeight: 1,
-                             display: 'inline-block',
-                             fontWeight: 'bold',
-                             transform: `scaleX(${fontScaleX}) ${node.isRotated ? 'rotate(90deg)' : ''}`
-                           }}>{c}</span>
+                          <span key={i} className={fontConfig[getCharType(c)]} style={{
+                            fontSize: `${actualFontSize * 0.7 * (1 + (fontScaleX - 1) * 0.5)}px`,
+                            lineHeight: 1,
+                            display: 'inline-block',
+                            fontWeight: 'bold',
+                            transform: `scaleX(${fontScaleX}) ${node.isRotated ? 'rotate(90deg)' : ''}`
+                          }}>{c}</span>
                         ))}
                       </div>
                     );
@@ -732,15 +732,15 @@ const RibbonCanvas = ({
                       const totalChars = leftChars.length + rightChars.length;
                       const blockHeight = (totalChars + 1) * actualFontSize * 0.7; // +1 space
                       return (
-                        <div 
-                          key={node.id} 
-                          className="flex flex-col items-center shrink-0 leading-none py-1 cursor-pointer hover:text-blue-600 transition-colors justify-between" 
+                        <div
+                          key={node.id}
+                          className="flex flex-col items-center shrink-0 leading-none py-1 cursor-pointer hover:text-blue-600 transition-colors justify-between"
                           style={{ height: blockHeight + (actualFontSize * 0.6), width: nodeW }}
                           onClick={() => onCharClick(node.id)}
                         >
                           {leftChars.map((c, i) => (
-                            <span key={`l${i}`} className={fontConfig[getCharType(c)]} style={{ 
-                              fontSize: `${actualFontSize * 0.7 * (1 + (fontScaleX - 1) * 0.5)}px`, 
+                            <span key={`l${i}`} className={fontConfig[getCharType(c)]} style={{
+                              fontSize: `${actualFontSize * 0.7 * (1 + (fontScaleX - 1) * 0.5)}px`,
                               lineHeight: 1,
                               display: 'inline-block',
                               fontWeight: 'bold',
@@ -750,8 +750,8 @@ const RibbonCanvas = ({
                           {/* / → space gap */}
                           <div style={{ height: `${actualFontSize * 0.7}px` }} />
                           {rightChars.map((c, i) => (
-                            <span key={`r${i}`} className={fontConfig[getCharType(c)]} style={{ 
-                              fontSize: `${actualFontSize * 0.7 * (1 + (fontScaleX - 1) * 0.5)}px`, 
+                            <span key={`r${i}`} className={fontConfig[getCharType(c)]} style={{
+                              fontSize: `${actualFontSize * 0.7 * (1 + (fontScaleX - 1) * 0.5)}px`,
                               lineHeight: 1,
                               display: 'inline-block',
                               fontWeight: 'bold',
@@ -765,38 +765,38 @@ const RibbonCanvas = ({
                     // Normal: two parallel columns
                     const blockHeight = maxLen * actualFontSize * 0.7; // increased
                     return (
-                      <div 
-                        key={node.id} 
-                        className="flex flex-row items-center justify-center shrink-0 py-1 cursor-pointer hover:text-blue-600 transition-colors" 
+                      <div
+                        key={node.id}
+                        className="flex flex-row items-center justify-center shrink-0 py-1 cursor-pointer hover:text-blue-600 transition-colors"
                         style={{ height: blockHeight + (actualFontSize * 0.6), width: nodeW }}
                         onClick={() => onCharClick(node.id)}
                       >
-                         <div className={cn("flex flex-col items-center h-full flex-1", leftChars.length > 1 ? "justify-between" : "justify-center")}>
-                           {leftChars.map((char, i) => (
-                             <div key={i} className={cn("flex items-center justify-center shrink-0", fontConfig[getCharType(char)])} style={{ height: blockHeight / maxLen, width: '100%' }}>
-                               <span className={fontConfig[getCharType(char)]} style={{ 
-                                 fontSize: `${actualFontSize * 0.45 * (1 + (fontScaleX - 1) * 0.5)}px`, 
-                                 display: 'inline-block',
-                                 lineHeight: 1,
-                                 fontWeight: 'bold',
-                                 transform: `scaleX(${fontScaleX})`
-                               }}>{char}</span>
-                             </div>
-                           ))}
-                         </div>
-                         <div className={cn("flex flex-col items-center h-full flex-1", rightChars.length > 1 ? "justify-between" : "justify-center")}>
-                           {rightChars.map((char, i) => (
-                             <div key={i} className={cn("flex items-center justify-center shrink-0", fontConfig[getCharType(char)])} style={{ height: blockHeight / maxLen, width: '100%' }}>
-                               <span className={fontConfig[getCharType(char)]} style={{ 
-                                 fontSize: `${actualFontSize * 0.45 * (1 + (fontScaleX - 1) * 0.5)}px`, 
-                                 display: 'inline-block',
-                                 lineHeight: 1,
-                                 fontWeight: 'bold',
-                                 transform: `scaleX(${fontScaleX})`
-                               }}>{char}</span>
-                             </div>
-                           ))}
-                         </div>
+                        <div className={cn("flex flex-col items-center h-full flex-1", leftChars.length > 1 ? "justify-between" : "justify-center")}>
+                          {leftChars.map((char, i) => (
+                            <div key={i} className={cn("flex items-center justify-center shrink-0", fontConfig[getCharType(char)])} style={{ height: blockHeight / maxLen, width: '100%' }}>
+                              <span className={fontConfig[getCharType(char)]} style={{
+                                fontSize: `${actualFontSize * 0.45 * (1 + (fontScaleX - 1) * 0.5)}px`,
+                                display: 'inline-block',
+                                lineHeight: 1,
+                                fontWeight: 'bold',
+                                transform: `scaleX(${fontScaleX})`
+                              }}>{char}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className={cn("flex flex-col items-center h-full flex-1", rightChars.length > 1 ? "justify-between" : "justify-center")}>
+                          {rightChars.map((char, i) => (
+                            <div key={i} className={cn("flex items-center justify-center shrink-0", fontConfig[getCharType(char)])} style={{ height: blockHeight / maxLen, width: '100%' }}>
+                              <span className={fontConfig[getCharType(char)]} style={{
+                                fontSize: `${actualFontSize * 0.45 * (1 + (fontScaleX - 1) * 0.5)}px`,
+                                display: 'inline-block',
+                                lineHeight: 1,
+                                fontWeight: 'bold',
+                                transform: `scaleX(${fontScaleX})`
+                              }}>{char}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     );
                   }
@@ -804,13 +804,13 @@ const RibbonCanvas = ({
                   // Law 1: Normal / 90-degree Rotation
                   const charFont = fontConfig[getCharType(node.content)];
                   return (
-                    <div 
-                      key={node.id} 
+                    <div
+                      key={node.id}
                       className="cursor-pointer hover:text-blue-600 transition-colors flex justify-center items-center shrink-0 leading-none"
                       style={{ height: nodeH, width: nodeW }}
                       onClick={() => onCharClick(node.id)}
                     >
-                      <span className={charFont} style={{ 
+                      <span className={charFont} style={{
                         fontSize: nodeH,
                         transform: `scaleX(${fontScaleX}) ${node.isRotated ? 'rotate(90deg)' : ''}`,
                         display: 'inline-block'
@@ -827,23 +827,23 @@ const RibbonCanvas = ({
 
         {/* --- SHOP LOGO INJECTION --- */}
         {printLogo && shopLogo && (
-            <div 
-              className="absolute left-0 right-0 flex justify-center items-center pointer-events-none"
-              style={{
-                top: `${(length - marginBottom) * scaleRatio}px`,
-                transform: 'none',
-                height: `${marginBottom * scaleRatio}px`,
-                paddingLeft: `${lace * scaleRatio}px`,
-                paddingRight: `${lace * scaleRatio}px`
-              }}
-            >
-               <img 
-                 src={shopLogo} 
-                 crossOrigin="anonymous"
-                 alt="Logo" 
-                 style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 1 }} 
-               />
-            </div>
+          <div
+            className="absolute left-0 right-0 flex justify-center items-center pointer-events-none"
+            style={{
+              top: `${(length - marginBottom) * scaleRatio}px`,
+              transform: 'none',
+              height: `${marginBottom * scaleRatio}px`,
+              paddingLeft: `${lace * scaleRatio}px`,
+              paddingRight: `${lace * scaleRatio}px`
+            }}
+          >
+            <img
+              src={shopLogo}
+              crossOrigin="anonymous"
+              alt="Logo"
+              style={{ width: '70%', maxWidth: '100%', maxHeight: '80%', objectFit: 'contain', opacity: 1 }}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -874,25 +874,29 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const bridgeCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [hasDismissedUpdate, setHasDismissedUpdate] = useState(sessionStorage.getItem('bridge_update_dismissed') === 'true');
-  
+
   const loadPrinters = () => {
     fetch('http://127.0.0.1:8000/api/printers', { signal: AbortSignal.timeout(5000) })
       .then(res => res.json())
       .then(res => {
         if (res.status === 'success' && Array.isArray(res.data)) {
-          setPrinters(res.data);
-          setSelectedPrinter(prev => {
-            if (prev && res.data.find((p: any) => p.name === prev)) return prev;
-            return res.data.length > 0 ? res.data[0].name : '';
+          // 현재 선택된 프린터의 가용성 확인 및 상태 업데이트
+          let activeName = '';
+          setSelectedPrinter(prevName => {
+            const found = res.data.find((p: any) => p.name === prevName);
+            activeName = found ? prevName : (res.data.length > 0 ? res.data[0].name : '');
+            return activeName;
           });
-          // 선택된 프린터의 타입도 함께 추적
-          setSelectedPrinterType(prev => {
-            const current = res.data.find((p: any) => p.name === prev) || res.data[0];
+
+          // 선택된 프린터의 타입(xprinter, epson_m105 등)을 정확하게 추적
+          // (주의: prev는 name이 아니라 type이므로 직접 find에 사용 금지)
+          setSelectedPrinterType(_prevType => {
+            const current = res.data.find((p: any) => p.name === activeName);
             return current?.type || 'generic';
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   };
 
   useEffect(() => {
@@ -905,7 +909,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           setBridgeConnected(true);
           const currentVer = data.version || '';
           setBridgeVersion(currentVer);
-          
+
           if (!isVersionOk(currentVer) && !hasDismissedUpdate) {
             setIsUpdateModalOpen(true);
           }
@@ -962,7 +966,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [selectedPrinterType, setSelectedPrinterType] = useState<'epson_m105' | 'xprinter' | 'generic'>('epson_m105');
   const [isPrinting, setIsPrinting] = useState(false);
 
-  // Xprinter: 최대 인쇄폭 108mm → width ≤ 105mm 프리셋만 표시
+  // Xprinter: 최대 인쇄폭 108mm → width ≤ 105mm 프리셋만 표시 (M105 등은 제외)
   const availablePresets = selectedPrinterType === 'xprinter'
     ? RIBBON_TYPES.filter(t => t.width <= 105)
     : RIBBON_TYPES;
@@ -1015,7 +1019,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const [rightSpacing, setRightSpacing] = useState(0); // 0 = auto
 
   // UI State
-  const [activeSide, setActiveSide] = useState<'left'|'right'>('left');
+  const [activeSide, setActiveSide] = useState<'left' | 'right'>('left');
   const [zoom, setZoom] = useState(0.4);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [phraseCategory, setPhraseCategory] = useState(0);
@@ -1025,7 +1029,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   // Font Manager State
   const [customFontItems, setCustomFontItems] = useState<CustomFontInfo[]>([]);
   const [hiddenFonts, setHiddenFonts] = useState<string[]>([]);
-  const [customStyles, setCustomStyles] = useState<{id: string, css: string}[]>([]);
+  const [customStyles, setCustomStyles] = useState<{ id: string, css: string }[]>([]);
   const [isFontManagerOpen, setIsFontManagerOpen] = useState(false);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [isPhraseManagerOpen, setIsPhraseManagerOpen] = useState(false);
@@ -1076,7 +1080,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     try {
       const { data, error } = await supabase.from('custom_phrases').select('*');
       if (error) throw error;
-      
+
       if (!data || data.length === 0) {
         setPhraseCategories(DEFAULT_PHRASE_CATEGORIES);
         return;
@@ -1113,34 +1117,34 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const loadFontSettings = async () => {
     const hidden = getHiddenFonts();
     setHiddenFonts(hidden || []);
-    
+
     try {
       const custom = await getAllCustomFonts();
       setCustomFontItems(custom);
-      
-      const styles: {id: string, css: string}[] = [];
+
+      const styles: { id: string, css: string }[] = [];
       for (const font of custom) {
-         if (font.source === 'local' && font.blob) {
-           const url = URL.createObjectURL(font.blob);
-           styles.push({
-             id: font.id,
-             css: `
+        if (font.source === 'local' && font.blob) {
+          const url = URL.createObjectURL(font.blob);
+          styles.push({
+            id: font.id,
+            css: `
                @font-face {
                  font-family: '${font.fontFamily}';
                  src: url('${url}');
                }
                .${font.id} { font-family: '${font.fontFamily}', sans-serif !important; }
              `
-           });
-         } else if (font.source === 'web' && font.webUrl) {
-           styles.push({
-             id: font.id,
-             css: `
+          });
+        } else if (font.source === 'web' && font.webUrl) {
+          styles.push({
+            id: font.id,
+            css: `
                @import url('${font.webUrl}');
                .${font.id} { font-family: ${font.fontFamily} !important; }
              `
-           });
-         }
+          });
+        }
       }
       setCustomStyles(styles);
     } catch (e) {
@@ -1154,15 +1158,15 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
     // Auto-Pair Cloud Print Agent with Local Bridge
     if (session?.user?.id) {
-       const metaLogo = (session.user as any)?.user_metadata?.shop_logo;
-       setShopLogo(metaLogo || null);
-       if (metaLogo) setPrintLogo(true);
-       
-       fetch('http://localhost:8000/api/pair', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ user_id: session.user.id })
-       }).catch(() => {});
+      const metaLogo = (session.user as any)?.user_metadata?.shop_logo;
+      setShopLogo(metaLogo || null);
+      if (metaLogo) setPrintLogo(true);
+
+      fetch('http://localhost:8000/api/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: session.user.id })
+      }).catch(() => { });
     }
   }, [session?.user?.id]);
 
@@ -1174,7 +1178,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       // 1. Supabase Storage에 업로드 (assets 버킷 사용)
       const fileExt = file.name.split('.').pop();
       const filePath = `shop_logos/${session.user.id}-${Date.now()}.${fileExt}`;
-      
+
       const { error: uploadError } = await supabase.storage
         .from('assets')
         .upload(filePath, file, { upsert: true });
@@ -1192,7 +1196,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       await supabase.auth.updateUser({
         data: { shop_logo: publicUrl }
       });
-      
+
       alert("✅ 매장 로고가 안전하게 업로드되었습니다.");
     } catch (err: any) {
       console.error('Logo upload error:', err);
@@ -1221,19 +1225,19 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
   const handlePrint = async () => {
     // 구독 상태 확인 (관리자는 항상 허용)
     if (!isAdmin && !subscription.isActive) {
-       setShowPaywall(true);
-       return;
+      setShowPaywall(true);
+      return;
     }
 
     try {
       setIsPrinting(true);
-      
+
       // 1. Bridge 연결 상태 사전 확인
       let bridgeOnline = false;
       let bridgeVersion = "";
       try {
-        const healthCheck = await fetch('http://127.0.0.1:8000/', { 
-          signal: AbortSignal.timeout(3000) 
+        const healthCheck = await fetch('http://127.0.0.1:8000/', {
+          signal: AbortSignal.timeout(3000)
         });
         const health = await healthCheck.json();
         bridgeOnline = health.status === 'ok';
@@ -1248,13 +1252,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         setIsPrinting(false);
         return;
       }
-      
+
       if (!isVersionOk(bridgeVersion) && !hasDismissedUpdate) {
         setIsUpdateModalOpen(true);
         setIsPrinting(false);
         return;
       }
-      
+
       // Helper to process a single ref into a rotated base64 image
       const captureRef = async (ref: React.RefObject<HTMLDivElement | null>, label: string, rotate: boolean = true) => {
         if (!ref.current) throw new Error(`캡처 영역(${label})을 찾을 수 없습니다.`);
@@ -1262,25 +1266,25 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         const captureStart = Date.now();
         await embedActiveFontsIntoElement(ref.current);
         const dataUrl = await toPng(ref.current, {
-          pixelRatio: 2.0, 
+          pixelRatio: 2.0,
           backgroundColor: '#ffffff',
           cacheBust: false,
           skipAutoScale: true,
           skipFonts: true,
           style: { transform: 'none' }
         });
-        
+
         let processedUrl = dataUrl;
         if (rotate) {
           processedUrl = await rotateImage180(dataUrl);
         }
-        
+
         const captureTime = Date.now() - captureStart;
         console.log(`[Print] ${label} Capture & Process: ${captureTime}ms`);
         return processedUrl;
       };
-      
-      const sendJob = async (refs: {ref: React.RefObject<HTMLDivElement | null>, label: string, rotate?: boolean}[], w: number, h: number, jobLabel: string) => {
+
+      const sendJob = async (refs: { ref: React.RefObject<HTMLDivElement | null>, label: string, rotate?: boolean }[], w: number, h: number, jobLabel: string) => {
         const images = [];
         for (const target of refs) {
           images.push(await captureRef(target.ref, target.label, target.rotate ?? true));
@@ -1292,7 +1296,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         try {
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
-          
+
           const response = await fetch('http://127.0.0.1:8000/api/print_image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1330,10 +1334,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       };
 
       if (printTarget === 'left') {
-        await sendJob([{ref: separateLeftRef, label: '경조사'}], width, length, '경조사');
+        await sendJob([{ ref: separateLeftRef, label: '경조사' }], width, length, '경조사');
         alert("✅ 경조사 인쇄 완료!");
       } else if (printTarget === 'right') {
-        await sendJob([{ref: separateRightRef, label: '보내는이'}], width, length, '보내는이');
+        await sendJob([{ ref: separateRightRef, label: '보내는이' }], width, length, '보내는이');
       } else {
         // 양쪽 모두 (UI 레이아웃 설정과 무관하게 항상 개별 캡처 후 브릿지에서 병합)
         // [수정] 인쇄 순서 및 회전 반전: 
@@ -1341,42 +1345,42 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         // 2. 왼쪽 리본 (보내는이): 그 다음 출력, 회전 없음 (정방향)
         // [최종 교정] 인쇄 순서 및 참조(Ref) 매핑 정상화
         await sendJob([
-          {ref: separateLeftRef, label: '경조사', rotate: true},   // 1번 (Y=0): 경조사어 (화면 왼쪽 리본 / TOP / 180도 회전)
-          {ref: separateRightRef, label: '보내는이', rotate: false} // 2번 (Y=Length): 보내는이 (화면 오른쪽 리본 / BOTTOM / 정방향)
+          { ref: separateLeftRef, label: '경조사', rotate: true },   // 1번 (Y=0): 경조사어 (화면 왼쪽 리본 / TOP / 180도 회전)
+          { ref: separateRightRef, label: '보내는이', rotate: false } // 2번 (Y=Length): 보내는이 (화면 오른쪽 리본 / BOTTOM / 정방향)
         ], width, length, '양쪽배너통합');
-        
+
         // 작업 추가 후 대기열 열기
         if (typeof setShowQueue === 'function') setShowQueue(true);
         alert("🚀 인쇄 작업이 대기열에 추가되었습니다. 우측 하단 모니터에서 확인하세요.");
       }
     } catch (error: any) {
-       console.error("[Print] Error:", error);
-       
-       // 사용자 친화적 에러 메시지
-       let userMessage = error.message || '알 수 없는 오류';
-       if (userMessage.includes('fetch') || userMessage.includes('network')) {
-         userMessage = '프린터 브릿지에 연결할 수 없습니다.\n\n💡 해결방법:\n1. RibbonBridge가 실행 중인지 확인\n2. 방화벽 설정 확인\n3. 프린터가 켜져있는지 확인';
-       }
-       
-       alert("❌ 인쇄 오류: " + userMessage);
-    } finally {
-       setIsPrinting(false);
+      console.error("[Print] Error:", error);
 
-       // 인쇄 이력 저장 (실패해도 무시)
-       try {
-         const { data: { user } } = await supabase.auth.getUser();
-         if (user) {
-           await supabase.from('print_history').insert([{
-             user_id: user.id,
-             ribbon_type: ribbonType,
-             width,
-             length,
-             left_text: leftText,
-             right_text: rightText,
-             printer_name: selectedPrinter,
-           }]);
-         }
-       } catch (_) { /* 이력 저장 실패는 무시 */ }
+      // 사용자 친화적 에러 메시지
+      let userMessage = error.message || '알 수 없는 오류';
+      if (userMessage.includes('fetch') || userMessage.includes('network')) {
+        userMessage = '프린터 브릿지에 연결할 수 없습니다.\n\n💡 해결방법:\n1. RibbonBridge가 실행 중인지 확인\n2. 방화벽 설정 확인\n3. 프린터가 켜져있는지 확인';
+      }
+
+      alert("❌ 인쇄 오류: " + userMessage);
+    } finally {
+      setIsPrinting(false);
+
+      // 인쇄 이력 저장 (실패해도 무시)
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('print_history').insert([{
+            user_id: user.id,
+            ribbon_type: ribbonType,
+            width,
+            length,
+            left_text: leftText,
+            right_text: rightText,
+            printer_name: selectedPrinter,
+          }]);
+        }
+      } catch (_) { /* 이력 저장 실패는 무시 */ }
     }
   };
 
@@ -1401,10 +1405,10 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       const padY = 40;
       const availableH = mainRef.current.clientHeight - padY * 2;
       const availableW = mainRef.current.clientWidth - padX * 2;
-      
+
       const targetH = length * 2;
       const targetW = width * 2;
-      
+
       if (targetH > 0 && targetW > 0 && availableH > 0 && availableW > 0) {
         const zoomH = availableH / targetH;
         const zoomW = availableW / targetW;
@@ -1418,16 +1422,16 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       try {
         const res = await fetch('http://127.0.0.1:8000/api/version', { mode: 'cors' });
         if (res.ok) {
-           const data = await res.json();
-           if (data.status === 'success' && data.version !== REQUIRED_BRIDGE_VERSION) {
-              console.log("[Bridge] Version mismatch:", data.version, "!==", REQUIRED_BRIDGE_VERSION);
-           }
+          const data = await res.json();
+          if (data.status === 'success' && data.version !== REQUIRED_BRIDGE_VERSION) {
+            console.log("[Bridge] Version mismatch:", data.version, "!==", REQUIRED_BRIDGE_VERSION);
+          }
         }
       } catch (e) {
         console.log("[Bridge] Could not check version. Might be offline or very old.");
       }
     };
-    
+
     const timer = setTimeout(checkBridge, 2000); // 2초 후 체크
     return () => clearTimeout(timer);
   }, []);
@@ -1437,7 +1441,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     else setRightText(prev => prev + sym);
   };
 
-  const toggleRotation = (id: string, side: 'left'|'right') => {
+  const toggleRotation = (id: string, side: 'left' | 'right') => {
     const toggleSet = (prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -1448,7 +1452,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     else setRightRotated(toggleSet);
   };
 
-  const handleRotateAll = (side: 'left'|'right') => {
+  const handleRotateAll = (side: 'left' | 'right') => {
     const text = side === 'left' ? leftText : rightText;
     const lines = text.split('\n').filter(l => l.trim() !== '');
     const newRotated = new Set<string>();
@@ -1479,7 +1483,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
     if (c.lace !== undefined) setLace(c.lace);
     if (c.marginTop !== undefined) setMarginTop(c.marginTop);
     if (c.marginBottom !== undefined) setMarginBottom(c.marginBottom);
-    
+
     if (c.leftText !== undefined) setLeftText(c.leftText);
     if (c.leftFontConfig) setLeftFontConfig(c.leftFontConfig);
     if (c.leftRatioX) setLeftRatioX(c.leftRatioX);
@@ -1503,12 +1507,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
   return (
     <div className="flex bg-slate-900 text-slate-200 h-screen w-screen overflow-hidden text-sm">
-      
+
       {/* 1. Left Panel: Config Sidebar (Mobile/Desktop Sync) */}
       <aside className={cn(
         "glass-panel relative lg:sticky top-0 left-0 bottom-0 h-full shrink-0 z-40 p-4 lg:p-5 overflow-y-auto border-r border-slate-700 transition-all duration-300 transform-gpu bg-slate-900/95 lg:bg-transparent",
-        isSidebarOpen 
-          ? "w-[260px] sm:w-72 lg:w-80 translate-x-0" 
+        isSidebarOpen
+          ? "w-[260px] sm:w-72 lg:w-80 translate-x-0"
           : "w-0 p-0 overflow-hidden border-none -translate-x-10 lg:absolute lg:opacity-0"
       )}>
         <div className="flex flex-col gap-5">
@@ -1520,7 +1524,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </h1>
               <span className="text-[8px] text-slate-500 uppercase tracking-widest ml-8 font-medium">Friends of Florist</span>
             </div>
-            <button 
+            <button
               onClick={() => setIsSidebarOpen(false)}
               className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition"
               title="메뉴 닫기"
@@ -1528,17 +1532,17 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <ChevronLeft size={18} />
             </button>
           </div>
-            <div className="flex items-center gap-1.5">
-              <button 
-                className="lg:hidden p-1.5 rounded-lg bg-slate-700 text-white"
-                onClick={() => setIsSidebarOpen(false)}
-              >
-                <X size={20} />
-              </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              className="lg:hidden p-1.5 rounded-lg bg-slate-700 text-white"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X size={20} />
+            </button>
             {isAdmin && (
               <button
                 onClick={onShowAdmin}
-                className="p-1.5 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 transition" 
+                className="p-1.5 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 transition"
                 title="관리자 대시보드"
               >
                 <Shield size={18} />
@@ -1546,7 +1550,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             )}
             <button
               onClick={async () => {
-                try { await fetch('http://127.0.0.1:8000/api/queue/clear', { method: 'POST' }); } catch(e){}
+                try { await fetch('http://127.0.0.1:8000/api/queue/clear', { method: 'POST' }); } catch (e) { }
                 await supabase.auth.signOut();
               }}
               className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="로그아웃"
@@ -1562,13 +1566,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           )}
 
           {/* ─── Bridge Connection Status ─── */}
-          <div 
-            className={`mt-2 px-2 py-1.5 rounded-lg text-[10px] font-medium text-center border tracking-wide cursor-pointer transition-all ${
-              bridgeConnected
-                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
-                : 'bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25 animate-pulse'
-            }`}
-            onClick={() => { 
+          <div
+            className={`mt-2 px-2 py-1.5 rounded-lg text-[10px] font-medium text-center border tracking-wide cursor-pointer transition-all ${bridgeConnected
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+              : 'bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25 animate-pulse'
+              }`}
+            onClick={() => {
               if (!bridgeConnected) {
                 setIsBridgeModalOpen(true);
               } else {
@@ -1582,23 +1585,22 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             }}
             title={bridgeConnected ? `Bridge v${bridgeVersion} 연결됨 (클릭: 상태 확인)` : '브릿지 미연결 (클릭: 설치 안내)'}
           >
-            {bridgeConnected 
-              ? `🟢 인쇄 브릿지 연결됨 (v${bridgeVersion})` 
+            {bridgeConnected
+              ? `🟢 인쇄 브릿지 연결됨 (v${bridgeVersion})`
               : '🔴 인쇄 브릿지 미연결 (클릭하여 설치)'}
           </div>
 
           {/* Subscription Badge */}
           {!subLoading && (
-            <div className={`mt-2 px-2 py-1.5 rounded-lg text-[10px] font-medium text-center border tracking-wide ${
-              isAdmin
-                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                : subscription.isActive 
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-red-500/15 text-red-400 border-red-500/30'
-            }`}>
+            <div className={`mt-2 px-2 py-1.5 rounded-lg text-[10px] font-medium text-center border tracking-wide ${isAdmin
+              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+              : subscription.isActive
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                : 'bg-red-500/15 text-red-400 border-red-500/30'
+              }`}>
               {isAdmin
                 ? '🛡️ 관리자 - 모든 기능 가능'
-                : subscription.isActive 
+                : subscription.isActive
                   ? `✅ ${subscription.plan === 'yearly' ? '연간' : subscription.plan === 'quarterly' ? '3개월' : subscription.plan === 'half_yearly' ? '6개월' : subscription.plan === 'event' ? '이벤트' : '월간'} 구독중 (잔여: ${getRemainingDays(subscription.expiresAt)}일)`
                   : '🔓 무료 체험 중 (인쇄 제한)'}
             </div>
@@ -1615,8 +1617,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             </div>
           </div>
           <div className="flex gap-2">
-            <select 
-              value={selectedPrinter} 
+            <select
+              value={selectedPrinter}
               onChange={e => {
                 setSelectedPrinter(e.target.value);
                 const p = printers.find((p: any) => p.name === e.target.value);
@@ -1647,7 +1649,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
                 </option>
               ))}
             </select>
-            <button 
+            <button
               onClick={() => {
                 fetch('http://127.0.0.1:8000/api/printers')
                   .then(res => res.json())
@@ -1664,7 +1666,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             if (!selected) return null;
             const engineColor = selected.brand === 'epson' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
               : selected.brand === 'hp' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-              : 'bg-slate-500/15 text-slate-400 border-slate-500/30';
+                : 'bg-slate-500/15 text-slate-400 border-slate-500/30';
             return (
               <div className={`mt-1.5 px-2 py-1 rounded text-[10px] font-medium text-center border ${engineColor}`}>
                 🔧 {selected.engine || 'GDI Variable Height Engine'}
@@ -1681,8 +1683,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             <label className="text-xs text-slate-400 block mb-1 font-bold">
               리본 프리셋 {selectedPrinterType === 'xprinter' && <span className="text-amber-400 text-[10px] ml-1">🏷️ Xprinter (≤105mm)</span>}
             </label>
-            <select 
-              value={ribbonType} 
+            <select
+              value={ribbonType}
               onChange={e => {
                 const presets = selectedPrinterType === 'xprinter' ? availablePresets : RIBBON_TYPES;
                 const selected = presets.find(t => t.id === e.target.value);
@@ -1742,9 +1744,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-slate-500">L</span>
-            <input 
-              type="range" 
-              min="-2" max="2" step="0.5" 
+            <input
+              type="range"
+              min="-2" max="2" step="0.5"
               value={marginOffset}
               onChange={e => setMarginOffset(Number(e.target.value))}
               className="flex-1 accent-blue-500"
@@ -1760,59 +1762,59 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div>
             <label className="text-xs text-slate-400 block mb-2 font-bold uppercase">인쇄 대상</label>
             <div className="grid grid-cols-3 gap-2">
-               <button 
+              <button
                 onClick={() => setPrintTarget('both')}
                 className={cn("p-2 rounded-lg text-xs font-bold transition", printTarget === 'both' ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
-               >양쪽 모두</button>
-               <button 
+              >양쪽 모두</button>
+              <button
                 onClick={() => setPrintTarget('left')}
                 className={cn("p-2 rounded-lg text-xs font-bold transition", printTarget === 'left' ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
-               >경조사어</button>
-               <button 
+              >경조사어</button>
+              <button
                 onClick={() => setPrintTarget('right')}
                 className={cn("p-2 rounded-lg text-xs font-bold transition", printTarget === 'right' ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
-               >보내는이</button>
+              >보내는이</button>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-             <select 
-               value={mediaType} 
-               onChange={e => {
-                 const v = e.target.value as 'roll' | 'cut';
-                 if (v === 'roll') {
-                   alert('🔧 롤리본 정밀 제어 기능은 현재 개발 중입니다.\n컷 리본 모드를 사용해 주세요.');
-                   setMediaType('cut');
-                 } else {
-                   setMediaType(v);
-                 }
-               }}
-               className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-slate-200 outline-none focus:ring-1"
-             >
-               <option value="cut">📄 컷 리본</option>
-               <option value="roll">🔄 롤 리본 (개발중)</option>
-             </select>
-             <select 
-               value={printQuality} 
-               onChange={e => setPrintQuality(e.target.value as any)}
-               className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-slate-200 outline-none focus:ring-1"
-             >
-               <option value="fast">⚡ 고속 인쇄</option>
-               <option value="high">💎 고급(저속)</option>
-             </select>
-             {mediaType === 'roll' ? (
-               <select 
-                 value={cuttingMargin} 
-                 onChange={e => setCuttingMargin(Number(e.target.value))}
-                 className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-blue-400 focus:ring-1"
-               >
-                 {[1,2,3,4,5,6,7,8,9,10].map(cm => (
-                   <option key={cm} value={cm * 10}>✂️ {cm}cm 커팅</option>
-                 ))}
-               </select>
-             ) : (
-               <div className="p-2 rounded-lg text-xs bg-slate-900/50 text-slate-500 flex items-center justify-center italic">커팅 NO</div>
-             )}
+            <select
+              value={mediaType}
+              onChange={e => {
+                const v = e.target.value as 'roll' | 'cut';
+                if (v === 'roll') {
+                  alert('🔧 롤리본 정밀 제어 기능은 현재 개발 중입니다.\n컷 리본 모드를 사용해 주세요.');
+                  setMediaType('cut');
+                } else {
+                  setMediaType(v);
+                }
+              }}
+              className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-slate-200 outline-none focus:ring-1"
+            >
+              <option value="cut">📄 컷 리본</option>
+              <option value="roll">🔄 롤 리본 (개발중)</option>
+            </select>
+            <select
+              value={printQuality}
+              onChange={e => setPrintQuality(e.target.value as any)}
+              className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-slate-200 outline-none focus:ring-1"
+            >
+              <option value="fast">⚡ 고속 인쇄</option>
+              <option value="high">💎 고급(저속)</option>
+            </select>
+            {mediaType === 'roll' ? (
+              <select
+                value={cuttingMargin}
+                onChange={e => setCuttingMargin(Number(e.target.value))}
+                className="p-2 rounded-lg text-xs font-bold bg-slate-800 border-slate-700 text-blue-400 focus:ring-1"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(cm => (
+                  <option key={cm} value={cm * 10}>✂️ {cm}cm 커팅</option>
+                ))}
+              </select>
+            ) : (
+              <div className="p-2 rounded-lg text-xs bg-slate-900/50 text-slate-500 flex items-center justify-center italic">커팅 NO</div>
+            )}
           </div>
         </div>
 
@@ -1827,8 +1829,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <button onClick={() => setActiveSide('left')} className={cn("text-[10px] px-2 py-0.5 rounded font-bold ml-1", activeSide === 'left' ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-400")}>ACTIVE</button>
             </div>
           </div>
-          <input 
-            type="text" value={leftText} 
+          <input
+            type="text" value={leftText}
             onChange={e => setLeftText(e.target.value)} onFocus={() => setActiveSide('left')}
             className="w-full p-2.5 rounded-xl text-sm font-bold bg-slate-850 border border-slate-700 text-white focus:ring-2 ring-blue-500/50 outline-none" placeholder="내용 입력"
           />
@@ -1845,14 +1847,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             </div>
             <FontSelector value={leftFontConfig[fontWizardMode]} onChange={val => setLeftFontConfig(prev => ({ ...prev, [fontWizardMode]: val }))} mode={fontWizardMode} fonts={availableFonts} />
             <div className="grid grid-cols-2 gap-2">
-               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">가로%</span>
-                  <input type="number" value={leftRatioX} onChange={e => setLeftRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
-               </div>
-               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">세로%</span>
-                  <input type="number" value={leftRatioY} onChange={e => setLeftRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
-               </div>
+              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">가로%</span>
+                <input type="number" value={leftRatioX} onChange={e => setLeftRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+              </div>
+              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">세로%</span>
+                <input type="number" value={leftRatioY} onChange={e => setLeftRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+              </div>
             </div>
           </div>
         </div>
@@ -1866,13 +1868,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               <button onClick={() => setActiveSide('right')} className={cn("text-[10px] px-2 py-0.5 rounded font-bold ml-1", activeSide === 'right' ? "bg-emerald-600 text-white" : "bg-slate-700 text-slate-400")}>ACTIVE</button>
             </div>
           </div>
-          <input 
-            type="text" value={rightText} 
+          <input
+            type="text" value={rightText}
             onChange={e => setRightText(e.target.value)} onFocus={() => setActiveSide('right')}
             className="w-full p-2.5 rounded-xl text-sm font-bold bg-slate-850 border border-slate-700 text-white focus:ring-2 ring-emerald-500/50 outline-none" placeholder="내용 입력"
           />
           <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-3">
-             <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-emerald-300">폰트 마법사</span>
               <div className="flex gap-1">
                 {(['ko', 'hj', 'en', 'sym'] as const).map(type => (
@@ -1884,14 +1886,14 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             </div>
             <FontSelector value={rightFontConfig[fontWizardModeRight]} onChange={val => setRightFontConfig(prev => ({ ...prev, [fontWizardModeRight]: val }))} mode={fontWizardModeRight} fonts={availableFonts} />
             <div className="grid grid-cols-2 gap-2">
-               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">가로%</span>
-                  <input type="number" value={rightRatioX} onChange={e => setRightRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
-               </div>
-               <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                  <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">세로%</span>
-                  <input type="number" value={rightRatioY} onChange={e => setRightRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
-               </div>
+              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">가로%</span>
+                <input type="number" value={rightRatioX} onChange={e => setRightRatioX(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+              </div>
+              <div className="flex bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                <span className="bg-slate-700 text-[9px] text-slate-400 px-1.5 flex items-center">세로%</span>
+                <input type="number" value={rightRatioY} onChange={e => setRightRatioY(Number(e.target.value))} className="w-full p-1.5 text-xs text-center font-mono bg-transparent text-white" />
+              </div>
             </div>
           </div>
         </div>
@@ -1901,20 +1903,20 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         {/* 9. 자주 쓰는 문구 */}
         <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
           <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
-             <div className="flex items-center gap-2">
-               <h3 className="text-xs font-bold text-slate-300">자주 쓰는 문구</h3>
-               <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400"><Settings size={14} /></button>
-             </div>
-             <select value={phraseCategory} onChange={e => setPhraseCategory(Number(e.target.value))} className="bg-slate-900 border border-slate-700 text-[10px] rounded px-2 py-1 text-slate-300 outline-none">
-               {phraseCategories.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
-             </select>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-bold text-slate-300">자주 쓰는 문구</h3>
+              <button onClick={() => setIsPhraseManagerOpen(true)} className="p-1 hover:bg-slate-700 rounded text-slate-400"><Settings size={14} /></button>
+            </div>
+            <select value={phraseCategory} onChange={e => setPhraseCategory(Number(e.target.value))} className="bg-slate-900 border border-slate-700 text-[10px] rounded px-2 py-1 text-slate-300 outline-none">
+              {phraseCategories.map((cat, idx) => <option key={idx} value={idx}>{cat.name.split(' ')[1] || cat.name}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
             {phraseCategories[phraseCategory]?.phrases.map((item, idx) => (
-               <button key={idx} onClick={() => { if (activeSide === 'left') setLeftText(item.text); else setRightText(item.text); }} className="bg-slate-900 hover:bg-blue-900/40 border border-slate-700 hover:border-blue-500 rounded p-2 text-center transition-all group">
-                 <span className="text-[11px] font-bold text-slate-200 block truncate group-hover:text-blue-300">{item.text}</span>
-                 <span className="text-[9px] text-slate-500 truncate">{item.desc}</span>
-               </button>
+              <button key={idx} onClick={() => { if (activeSide === 'left') setLeftText(item.text); else setRightText(item.text); }} className="bg-slate-900 hover:bg-blue-900/40 border border-slate-700 hover:border-blue-500 rounded p-2 text-center transition-all group">
+                <span className="text-[11px] font-bold text-slate-200 block truncate group-hover:text-blue-300">{item.text}</span>
+                <span className="text-[9px] text-slate-500 truncate">{item.desc}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -1924,9 +1926,9 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <h3 className="text-xs font-bold text-slate-300 mb-2">특수 기호</h3>
           <div className="grid grid-cols-6 gap-1">
             {SYMBOL_BANK.map(sym => (
-               <button key={sym} onClick={() => insertSymbol(sym)} className="bg-slate-900 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 rounded py-1.5 text-xs text-slate-300 hover:text-white transition-colors">
-                 {sym}
-               </button>
+              <button key={sym} onClick={() => insertSymbol(sym)} className="bg-slate-900 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 rounded py-1.5 text-xs text-slate-300 hover:text-white transition-colors">
+                {sym}
+              </button>
             ))}
           </div>
         </div>
@@ -1936,17 +1938,17 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">🏪 내 점포 로고</label>
             <div className="flex items-center gap-2">
-              {shopLogo && <button 
-                   onClick={async () => {
-                     setShopLogo(null);
-                     setPrintLogo(false);
-                     await supabase.auth.updateUser({ data: { shop_logo: "" } });
-                     alert("로고가 서버에서 완전히 삭제되었습니다.");
-                   }} 
-                   className="text-[10px] text-red-500 font-bold hover:text-red-400"
-                 >
-                   삭제
-                 </button>}
+              {shopLogo && <button
+                onClick={async () => {
+                  setShopLogo(null);
+                  setPrintLogo(false);
+                  await supabase.auth.updateUser({ data: { shop_logo: "" } });
+                  alert("로고가 서버에서 완전히 삭제되었습니다.");
+                }}
+                className="text-[10px] text-red-500 font-bold hover:text-red-400"
+              >
+                삭제
+              </button>}
               <label className="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" className="sr-only peer" checked={printLogo} onChange={e => setPrintLogo(e.target.checked)} disabled={!shopLogo} />
                 <div className="w-7 h-4 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full"></div>
@@ -1955,13 +1957,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           </div>
           {!shopLogo ? (
             <label className="flex items-center justify-center w-full p-3 border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:bg-slate-900 transition text-slate-500 hover:text-slate-300">
-              <span className="text-xs flex flex-col items-center gap-1"><Upload size={18}/> 로고 등록</span>
+              <span className="text-xs flex flex-col items-center gap-1"><Upload size={18} /> 로고 등록</span>
               <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
             </label>
           ) : (
-             <div className="p-2 bg-white rounded-lg flex justify-center">
-               <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain" />
-             </div>
+            <div className="p-2 bg-white rounded-lg flex justify-center">
+              <img src={shopLogo} alt="Shop Logo" className="h-8 object-contain" />
+            </div>
           )}
         </div>
 
@@ -1998,8 +2000,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       </aside>
 
       {/* 2. Center Panel: Canvas */}
-      <main 
-        ref={mainRef} 
+      <main
+        ref={mainRef}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDragging}
@@ -2013,7 +2015,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       >
         {/* Ribbon Layout Management Buttons (Panel Toggles) */}
         {!isSidebarOpen && (
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(true)}
             className="fixed top-1/2 left-0 -translate-y-1/2 z-[45] p-2.5 bg-blue-600 text-white rounded-r-xl shadow-lg border-y border-r border-blue-400/50 hover:bg-blue-500 transition-all active:scale-95 group"
             title="설정 메뉴 열기"
@@ -2025,7 +2027,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
 
         {/* Mobile Menu Toggle Floating Button (Legacy, keep but adjust) */}
         {!isSidebarOpen && (
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(true)}
             className="lg:hidden fixed top-4 left-4 z-30 p-2.5 bg-blue-600/90 text-white rounded-xl shadow-lg shadow-blue-900/40 backdrop-blur hover:bg-blue-500 transition active:scale-95"
             title="메뉴 열기"
@@ -2035,154 +2037,154 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         )}
 
         <div className="inline-flex min-w-full min-h-full items-start justify-center py-8 lg:py-12 select-none">
-        {/* Design Canvas Area Wrapper to handle Scroll with Zoom */}
-        <div 
-          className="relative transition-all duration-300 transform-gpu"
-          style={{ 
-            transform: `scale(${zoom})`, 
-            transformOrigin: 'top center',
-            // Accurate sizing to fix scrollbars:
-            // We need to set the parent's layout size to the SCALED size.
-            // But we do it via padding/margins to the inner relative container.
-            width: isPreviewMode ? `${(width * 2) * zoom}px` : `${((width * 4) + 100) * zoom}px`, // approximate for double ribbon
-            height: `${(length * 2) * zoom}px`,
-            marginBottom: '100px'
-          }}
-        >
-          <div className={cn(
-            "flex absolute top-0 left-1/2 -translate-x-1/2 transition-all duration-300",
-            isPreviewMode ? "gap-4 flex-col items-center" : "flex-col lg:flex-row gap-12 lg:gap-24 items-center",
-            isPreviewMode && "bg-slate-800/40 p-10 rounded-3xl border border-slate-700/50 backdrop-blur"
-          )}>
-          {isPreviewMode ? (
-            // ================= PREVIEW MODE =================
-            <div className="flex flex-col items-center">
-              <div className="text-blue-400 font-semibold mb-8 text-2xl uppercase tracking-widest border-b border-blue-400/30 pb-2">
-                Print Preview ({printTarget === 'both' ? (printLayout === 'connected' ? 'Connected' : 'Separate Both') : printTarget})
-              </div>
-              
-              <div className="flex flex-col items-center bg-white shadow-2xl p-4 border-[10px] border-slate-700 rounded-sm">
-                {printTarget === 'left' && (
-                  <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
-                      <RibbonCanvas 
-                        text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
-                        width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                        rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
-                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                        shopLogo={shopLogo} printLogo={printLogo}
-                      />
+          {/* Design Canvas Area Wrapper to handle Scroll with Zoom */}
+          <div
+            className="relative transition-all duration-300 transform-gpu"
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: 'top center',
+              // Accurate sizing to fix scrollbars:
+              // We need to set the parent's layout size to the SCALED size.
+              // But we do it via padding/margins to the inner relative container.
+              width: isPreviewMode ? `${(width * 2) * zoom}px` : `${((width * 4) + 100) * zoom}px`, // approximate for double ribbon
+              height: `${(length * 2) * zoom}px`,
+              marginBottom: '100px'
+            }}
+          >
+            <div className={cn(
+              "flex absolute top-0 left-1/2 -translate-x-1/2 transition-all duration-300",
+              isPreviewMode ? "gap-4 flex-col items-center" : "flex-col lg:flex-row gap-12 lg:gap-24 items-center",
+              isPreviewMode && "bg-slate-800/40 p-10 rounded-3xl border border-slate-700/50 backdrop-blur"
+            )}>
+              {isPreviewMode ? (
+                // ================= PREVIEW MODE =================
+                <div className="flex flex-col items-center">
+                  <div className="text-blue-400 font-semibold mb-8 text-2xl uppercase tracking-widest border-b border-blue-400/30 pb-2">
+                    Print Preview ({printTarget === 'both' ? (printLayout === 'connected' ? 'Connected' : 'Separate Both') : printTarget})
                   </div>
-                )}
-                {printTarget === 'right' && (
-                  <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
-                    <RibbonCanvas 
-                      text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
-                      width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                      rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
-                      marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                      shopLogo={shopLogo} printLogo={printLogo}
-                    />
-                  </div>
-                )}
-                {printTarget === 'both' && printLayout === 'connected' && (
-                  <div className="flex flex-col items-center">
-                    <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
-                      <RibbonCanvas 
-                        text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
-                        width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                        rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
-                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                        shopLogo={shopLogo} printLogo={printLogo}
-                      />
-                    </div>
-                    {/* Middle Connection Line */}
-                    <div style={{ width: `${(width - lace*2) * 2}px`, height: '4px', backgroundColor: 'black' }} />
-                    <RibbonCanvas 
-                      text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
-                      width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                      rotatedIds={rightRotated} onCharClick={() => {}}
-                      scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
-                      marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                      shopLogo={shopLogo} printLogo={printLogo}
-                    />
-                  </div>
-                )}
-                {printTarget === 'both' && printLayout === 'separate' && (
-                  <div className="flex gap-12">
-                    <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
-                      <RibbonCanvas 
-                        text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
-                        width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                        rotatedIds={leftRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={leftSpacing} side="left" 
-                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                        shopLogo={shopLogo} printLogo={printLogo}
-                      />
-                    </div>
-                    <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
-                      <RibbonCanvas 
-                        text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
-                        width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                        rotatedIds={rightRotated} onCharClick={() => {}}
-                        scaleRatio={2} zoom={1} spacing={rightSpacing} side="right" 
-                        marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                        shopLogo={shopLogo} printLogo={printLogo}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            // ================= DESIGN MODE =================
-            <div 
-              ref={printAreaRef}
-              className="flex gap-24 transition-transform duration-300 bg-[#0f172a]" 
-              style={{ transformOrigin: 'top center' }}
-            >
-              <RibbonCanvas 
-                text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
-                width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                rotatedIds={leftRotated} onCharClick={(id) => toggleRotation(id, 'left')}
-                scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'} 
-                marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                shopLogo={shopLogo} printLogo={printLogo}
-                onClick={() => setActiveSide('left')} side="left"
-              />
-              <RibbonCanvas 
-                text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
-                width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-                rotatedIds={rightRotated} onCharClick={(id) => toggleRotation(id, 'right')}
-                scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'} 
-                marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset} 
-                shopLogo={shopLogo} printLogo={printLogo}
-                onClick={() => setActiveSide('right')} side="right"
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
 
-      {/* Floating Actions Toolbar */}
+                  <div className="flex flex-col items-center bg-white shadow-2xl p-4 border-[10px] border-slate-700 rounded-sm">
+                    {printTarget === 'left' && (
+                      <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
+                        <RibbonCanvas
+                          text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
+                          width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                          rotatedIds={leftRotated} onCharClick={() => { }}
+                          scaleRatio={2} zoom={1} spacing={leftSpacing} side="left"
+                          marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                          shopLogo={shopLogo} printLogo={printLogo}
+                        />
+                      </div>
+                    )}
+                    {printTarget === 'right' && (
+                      <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
+                        <RibbonCanvas
+                          text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
+                          width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                          rotatedIds={rightRotated} onCharClick={() => { }}
+                          scaleRatio={2} zoom={1} spacing={rightSpacing} side="right"
+                          marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                          shopLogo={shopLogo} printLogo={printLogo}
+                        />
+                      </div>
+                    )}
+                    {printTarget === 'both' && printLayout === 'connected' && (
+                      <div className="flex flex-col items-center">
+                        <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
+                          <RibbonCanvas
+                            text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
+                            width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                            rotatedIds={leftRotated} onCharClick={() => { }}
+                            scaleRatio={2} zoom={1} spacing={leftSpacing} side="left"
+                            marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                            shopLogo={shopLogo} printLogo={printLogo}
+                          />
+                        </div>
+                        {/* Middle Connection Line */}
+                        <div style={{ width: `${(width - lace * 2) * 2}px`, height: '4px', backgroundColor: 'black' }} />
+                        <RibbonCanvas
+                          text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
+                          width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                          rotatedIds={rightRotated} onCharClick={() => { }}
+                          scaleRatio={2} zoom={1} spacing={rightSpacing} side="right"
+                          marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                          shopLogo={shopLogo} printLogo={printLogo}
+                        />
+                      </div>
+                    )}
+                    {printTarget === 'both' && printLayout === 'separate' && (
+                      <div className="flex gap-12">
+                        <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
+                          <RibbonCanvas
+                            text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
+                            width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                            rotatedIds={leftRotated} onCharClick={() => { }}
+                            scaleRatio={2} zoom={1} spacing={leftSpacing} side="left"
+                            marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                            shopLogo={shopLogo} printLogo={printLogo}
+                          />
+                        </div>
+                        <div style={{ transform: 'rotate(180deg)', transformOrigin: 'center center' }}>
+                          <RibbonCanvas
+                            text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
+                            width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                            rotatedIds={rightRotated} onCharClick={() => { }}
+                            scaleRatio={2} zoom={1} spacing={rightSpacing} side="right"
+                            marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                            shopLogo={shopLogo} printLogo={printLogo}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                // ================= DESIGN MODE =================
+                <div
+                  ref={printAreaRef}
+                  className="flex gap-24 transition-transform duration-300 bg-[#0f172a]"
+                  style={{ transformOrigin: 'top center' }}
+                >
+                  <RibbonCanvas
+                    text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
+                    width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                    rotatedIds={leftRotated} onCharClick={(id) => toggleRotation(id, 'left')}
+                    scaleRatio={2} zoom={zoom} spacing={leftSpacing} isActive={activeSide === 'left'}
+                    marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                    shopLogo={shopLogo} printLogo={printLogo}
+                    onClick={() => setActiveSide('left')} side="left"
+                  />
+                  <RibbonCanvas
+                    text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
+                    width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
+                    rotatedIds={rightRotated} onCharClick={(id) => toggleRotation(id, 'right')}
+                    scaleRatio={2} zoom={zoom} spacing={rightSpacing} isActive={activeSide === 'right'}
+                    marginOffset={(RIBBON_TYPES.find(r => r.id === ribbonType)?.marginOffset || 0) + marginOffset}
+                    shopLogo={shopLogo} printLogo={printLogo}
+                    onClick={() => setActiveSide('right')} side="right"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Floating Actions Toolbar */}
         <div className={cn(
           "fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-xl p-2 rounded-full border border-slate-600/50 flex gap-1 sm:gap-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[60] transition-all duration-300"
         )}>
-          <button 
-            onClick={() => checkSubscriptionAction(() => setIsTemplateManagerOpen(true))} 
+          <button
+            onClick={() => checkSubscriptionAction(() => setIsTemplateManagerOpen(true))}
             className="p-2 rounded-full hover:bg-slate-700 text-amber-400 transition-colors flex items-center gap-2 px-4 whitespace-nowrap"
           >
             <FolderOpen size={18} />
             <span className="text-xs font-semibold uppercase">Templates</span>
           </button>
           <div className="w-px h-6 bg-slate-600 my-auto mx-1"></div>
-          <button 
-            onClick={() => setIsPreviewMode(!isPreviewMode)} 
+          <button
+            onClick={() => setIsPreviewMode(!isPreviewMode)}
             className={cn(
-              "p-2 rounded-full transition-colors flex items-center gap-2 px-4 whitespace-nowrap", 
+              "p-2 rounded-full transition-colors flex items-center gap-2 px-4 whitespace-nowrap",
               isPreviewMode ? "bg-blue-600 text-white" : "hover:bg-slate-700 text-slate-300"
             )}
           >
@@ -2194,7 +2196,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="px-3 flex items-center justify-center font-mono text-xs text-white">{Math.round(zoom * 100)}%</div>
           <button onClick={() => setZoom(z => Math.min(2.0, z + 0.1))} className="p-2 hover:bg-slate-700 rounded-full transition-colors"><Maximize2 size={18} /></button>
           <div className="w-px h-6 bg-slate-600 my-auto mx-1"></div>
-          <button 
+          <button
             onClick={() => checkSubscriptionAction(handlePrint)}
             disabled={isPrinting}
             className={cn(
@@ -2220,12 +2222,12 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       </style>
 
       {/* Font Manager Dialog */}
-      <FontManagerDialog 
-        isOpen={isFontManagerOpen} 
+      <FontManagerDialog
+        isOpen={isFontManagerOpen}
         onClose={() => {
           setIsFontManagerOpen(false);
           loadFontSettings();
-        }} 
+        }}
         baseFonts={FONTS}
         onSettingsChanged={loadFontSettings}
       />
@@ -2255,39 +2257,39 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       {/* IMPORTANT: No CSS transforms on ref elements! toPng cannot reliably capture CSS transforms.
           Rotation is handled post-capture via Canvas API in handlePrint. */}
       <div style={{ position: 'fixed', left: -9999, top: -9999, pointerEvents: 'none', opacity: 0 }}>
-        
+
         {/* 1. Connected Strip Mode [L + Line + R] - printed as continuous strip */}
-        <div 
-          ref={connectedPrintRef} 
-          style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
+        <div
+          ref={connectedPrintRef}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
             backgroundColor: 'white',
             width: `${width * 3}px`
           }}
         >
           {/* Left ribbon (경조사) - reversed order via column-reverse */}
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column-reverse', 
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column-reverse',
             width: `${width * 3}px`,
             backgroundColor: 'white'
           }}>
             <RibbonCanvas
               text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
               width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-              rotatedIds={leftRotated} onCharClick={() => {}}
+              rotatedIds={leftRotated} onCharClick={() => { }}
               scaleRatio={3} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
               shopLogo={shopLogo} printLogo={printLogo}
             />
           </div>
           {/* Middle Connection Line */}
-          <div style={{ width: `${(width - lace*2) * 3}px`, height: '6px', backgroundColor: 'black' }} />
+          <div style={{ width: `${(width - lace * 2) * 3}px`, height: '6px', backgroundColor: 'black' }} />
           <RibbonCanvas
             text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-            rotatedIds={rightRotated} onCharClick={() => {}}
+            rotatedIds={rightRotated} onCharClick={() => { }}
             scaleRatio={3} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
             shopLogo={shopLogo} printLogo={printLogo}
           />
@@ -2298,16 +2300,16 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <RibbonCanvas
             text={leftText} fontConfig={leftFontConfig} ratioX={leftRatioX} ratioY={leftRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-            rotatedIds={leftRotated} onCharClick={() => {}}
+            rotatedIds={leftRotated} onCharClick={() => { }}
             scaleRatio={3} zoom={1} spacing={leftSpacing} side="left" isPrintMode={true}
             shopLogo={shopLogo} printLogo={printLogo}
           />
         </div>
         <div ref={separateRightRef} style={{ backgroundColor: 'white' }}>
-          <RibbonCanvas 
+          <RibbonCanvas
             text={rightText} fontConfig={rightFontConfig} ratioX={rightRatioX} ratioY={rightRatioY} lace={lace}
             width={width} length={length} marginTop={marginTop} marginBottom={marginBottom}
-            rotatedIds={rightRotated} onCharClick={() => {}}
+            rotatedIds={rightRotated} onCharClick={() => { }}
             scaleRatio={3} zoom={1} spacing={rightSpacing} side="right" isPrintMode={true}
             shopLogo={shopLogo} printLogo={printLogo}
           />
@@ -2320,11 +2322,11 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[300] animate-in fade-in duration-300">
           <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-8 max-w-lg w-full mx-4 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"></div>
-            
+
             <div className="text-5xl mb-6">🚀</div>
             <h2 className="text-2xl font-bold text-white mb-2">최신 인쇄 브릿지 필수 설치 [v{REQUIRED_BRIDGE_VERSION}]</h2>
             <p className="text-amber-400 font-medium mb-4">새로운 고성능 가변 길이 엔진(v{REQUIRED_BRIDGE_VERSION})이 출시되었습니다!</p>
-            
+
             <div className="bg-slate-800/50 rounded-2xl p-4 text-left mb-6 border border-slate-700">
               <ul className="text-sm text-slate-300 space-y-2">
                 <li className="flex items-start gap-2">✅ <span className="text-white font-semibold">가변 길이 무제한:</span> 에이포(A4) 한계를 넘어선 초장문 리본 인쇄 가능</li>
@@ -2333,17 +2335,17 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </ul>
             </div>
 
-            <p className="text-slate-400 text-xs mb-8">기존 브릿지를 사용 중이라면, 아래 버튼을 눌러 새 버전을 받아주세요.<br/>(압축을 푼 뒤 v11 설치 파일을 실행하면 즉시 교체됩니다.)</p>
+            <p className="text-slate-400 text-xs mb-8">기존 브릿지를 사용 중이라면, 아래 버튼을 눌러 새 버전을 받아주세요.<br />(압축을 푼 뒤 v11 설치 파일을 실행하면 즉시 교체됩니다.)</p>
 
             <div className="flex flex-col gap-3">
-              <a 
-                href={`/RibbonBridge_Setup_v${REQUIRED_BRIDGE_VERSION.replace('.', '_')}.exe`} 
+              <a
+                href={`/RibbonBridge_Setup_v${REQUIRED_BRIDGE_VERSION.replace('.', '_')}.exe`}
                 download
                 className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98]"
               >
                 📥 v{REQUIRED_BRIDGE_VERSION} 최신 리본 브릿지 설치하기
               </a>
-              <button 
+              <button
                 onClick={() => {
                   setIsUpdateModalOpen(false);
                   setHasDismissedUpdate(true);
@@ -2362,7 +2364,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
           <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-8 text-center">
             <div className="text-6xl mb-4">🔒</div>
             <h2 className="text-2xl font-semibold text-white mb-2">구독이 필요합니다</h2>
-            <p className="text-slate-400 mb-6">인쇄 기능을 사용하려면 유효한 구독이 필요합니다.<br/>아래에서 요금제를 선택해주세요.</p>
+            <p className="text-slate-400 mb-6">인쇄 기능을 사용하려면 유효한 구독이 필요합니다.<br />아래에서 요금제를 선택해주세요.</p>
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="bg-slate-700/50 rounded-xl p-4 border border-slate-600 hover:border-blue-500 cursor-pointer transition">
                 <p className="text-lg font-semibold text-white">1개월</p>
@@ -2392,7 +2394,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         </div>
       )}
 
-      <SaveConfigDialog 
+      <SaveConfigDialog
         isOpen={isSaveDialogOpen}
         onClose={() => setIsSaveDialogOpen(false)}
         onSave={async (name: string) => {
@@ -2409,7 +2411,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
         }}
       />
 
-      <LoadConfigDialog 
+      <LoadConfigDialog
         isOpen={isLoadDialogOpen}
         onClose={() => setIsLoadDialogOpen(false)}
         onLoad={onLoadConfig}
@@ -2424,8 +2426,8 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
             <div className="text-6xl mb-4">🖨️</div>
             <h2 className="text-2xl font-semibold text-white mb-2">프린트 브릿지 설치 필요</h2>
             <p className="text-slate-400 mb-6 text-sm">
-              인쇄를 시작하려면 <b>최초 1회 브릿지 마법사</b> 설치가 필요합니다.<br/>
-              다운로드 후 [설치 마법사]를 열고 딱 1번만 실행하시면<br/>
+              인쇄를 시작하려면 <b>최초 1회 브릿지 마법사</b> 설치가 필요합니다.<br />
+              다운로드 후 [설치 마법사]를 열고 딱 1번만 실행하시면<br />
               앞으로 <b>자동으로 컴퓨터가 켜질 때마다 영구적으로 연결</b>됩니다!
             </p>
             <div className="bg-blue-900/30 border border-blue-500/30 rounded p-3 mb-6 text-left">
@@ -2435,13 +2437,13 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
               </p>
             </div>
             <div className="flex gap-3 justify-center">
-              <button 
+              <button
                 onClick={() => setIsBridgeModalOpen(false)}
                 className="px-6 py-3 rounded-lg font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
               >
                 닫기
               </button>
-              <button 
+              <button
                 onClick={() => {
                   window.open('/RibbonBridge_Setup_v25_0.exe');
                   setIsBridgeModalOpen(false);
@@ -2459,7 +2461,7 @@ export default function App({ session, isAdmin, onShowAdmin }: { session?: Sessi
       <PrintQueueMonitor isOpen={showQueue} onClose={() => setShowQueue(false)} />
       <MonitorToggle onClick={() => setShowQueue(!showQueue)} hasJobs={false} />
 
-      <UpdateBridgeModal 
+      <UpdateBridgeModal
         isOpen={isUpdateModalOpen}
         onClose={() => {
           setIsUpdateModalOpen(false);
@@ -2483,14 +2485,14 @@ function UpdateBridgeModal({ isOpen, onClose, onDownload }: { isOpen: boolean, o
       <div className="bg-slate-900 rounded-[2rem] border border-slate-700 shadow-2xl w-full max-w-lg p-10 text-center relative overflow-hidden ring-1 ring-white/10">
         {/* Top Accent Gradient */}
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-500 via-blue-500 to-emerald-400"></div>
-        
+
         {/* Icon Section */}
         <div className="mb-8 flex justify-center">
           <div className="relative">
             <div className="absolute -inset-4 bg-blue-500/20 blur-2xl rounded-full"></div>
             <div className="bg-slate-800 p-6 rounded-[2rem] border border-slate-700 relative">
-               <Printer size={64} className="text-blue-400" strokeWidth={1} />
-               <div className="absolute -bottom-1 -right-1 bg-red-500 w-4 h-4 rounded-full border-2 border-slate-900 shadow-lg animate-pulse" />
+              <Printer size={64} className="text-blue-400" strokeWidth={1} />
+              <div className="absolute -bottom-1 -right-1 bg-red-500 w-4 h-4 rounded-full border-2 border-slate-900 shadow-lg animate-pulse" />
             </div>
           </div>
         </div>
@@ -2499,31 +2501,31 @@ function UpdateBridgeModal({ isOpen, onClose, onDownload }: { isOpen: boolean, o
         <h2 className="text-3xl font-extrabold text-white mb-6 tracking-tight">프린트 브릿지 설치 필요</h2>
         <div className="space-y-4 mb-8 text-slate-300 leading-relaxed font-medium">
           <p>인쇄를 시작하려면 <span className="text-white">최초 1회 브릿지 마법사</span> 설치가 필요합니다.</p>
-          <p>다운로드 후 [설치 마법사]를 열고 딱 1번만 실행하시면<br/>앞으로 자동으로 컴퓨터가 켜질 때마다 영구적으로 연결됩니다!</p>
+          <p>다운로드 후 [설치 마법사]를 열고 딱 1번만 실행하시면<br />앞으로 자동으로 컴퓨터가 켜질 때마다 영구적으로 연결됩니다!</p>
         </div>
 
         {/* Tip Box (PC Protection) */}
         <div className="bg-blue-900/20 border border-blue-500/30 rounded-2xl p-5 mb-10 text-left">
           <div className="flex items-start gap-3">
-             <span className="text-xl">💡</span>
-             <div className="text-sm">
-                <p className="text-blue-200 font-bold mb-1.5">"Windows의 PC 보호" 창이 나타날 시</p>
-                <p className="text-blue-300/80 leading-relaxed">
-                  <strong className="text-white border-b border-white/40">추가 정보</strong> 버튼을 누르신 후, 우측 하단에 생기는 <strong className="text-white">실행 버튼</strong>을 눌러주시면 깔끔하게 1초만에 자동 설치됩니다.
-                </p>
-             </div>
+            <span className="text-xl">💡</span>
+            <div className="text-sm">
+              <p className="text-blue-200 font-bold mb-1.5">"Windows의 PC 보호" 창이 나타날 시</p>
+              <p className="text-blue-300/80 leading-relaxed">
+                <strong className="text-white border-b border-white/40">추가 정보</strong> 버튼을 누르신 후, 우측 하단에 생기는 <strong className="text-white">실행 버튼</strong>을 눌러주시면 깔끔하게 1초만에 자동 설치됩니다.
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Button Section */}
         <div className="flex gap-4">
-          <button 
+          <button
             onClick={onClose}
             className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl transition-all active:scale-95 border border-slate-700/50"
           >
             닫기
           </button>
-          <button 
+          <button
             onClick={onDownload}
             className="flex-[1.8] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-900/40 hover:shadow-blue-500/20 active:scale-95"
           >
@@ -2544,9 +2546,9 @@ function SaveConfigDialog({ isOpen, onClose, onSave }: { isOpen: boolean, onClos
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[300]">
       <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 w-full max-w-sm">
         <h3 className="text-lg font-bold text-white mb-4">현재 작업 저장</h3>
-        <input 
-          type="text" 
-          value={name} 
+        <input
+          type="text"
+          value={name}
           onChange={e => setName(e.target.value)}
           placeholder="템플릿 이름 입력"
           className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white mb-4 outline-none focus:ring-1 ring-blue-500"
@@ -2576,8 +2578,8 @@ function LoadConfigDialog({ isOpen, onClose, onLoad, userId }: { isOpen: boolean
         <h3 className="text-lg font-bold text-white mb-4">저장된 템플릿</h3>
         <div className="max-h-60 overflow-y-auto space-y-2 mb-4">
           {configs.map(c => (
-            <button 
-              key={c.id} 
+            <button
+              key={c.id}
               onClick={() => { onLoad(c.config); onClose(); }}
               className="w-full p-3 bg-slate-900 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded text-left transition-all"
             >
@@ -2601,7 +2603,7 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
       const res = await fetch('http://127.0.0.1:8000/api/queue');
       const data = await res.json();
       if (data.status === 'success') setQueue(data.data);
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -2629,7 +2631,7 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
   };
 
   if (!isOpen) return (
-    <button 
+    <button
       onClick={() => onClose()} // this state logic should be inverted but for simplicity:
       style={{ position: 'fixed', bottom: '20px', right: '20px' }}
       onMouseEnter={() => onClose()} // reuse trigger
@@ -2653,7 +2655,7 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
         </div>
-        
+
         <div className="max-h-96 overflow-y-auto p-2 space-y-2">
           {queue.length === 0 ? (
             <div className="text-center py-8 text-slate-500 text-xs text-pretty">
@@ -2666,7 +2668,7 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               const now = Date.now();
               const elapsed = Math.floor((now - createdTime) / 1000);
               const timeLeft = Math.max(0, 120 - elapsed);
-              
+
               // Auto-delete when time's up
               if (timeLeft <= 0 && job.status !== 'printing') {
                 handleDelete(job.id);
@@ -2675,8 +2677,8 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               return (
                 <div key={job.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3 relative overflow-hidden group">
                   {/* Progress bar background for timer */}
-                  <div 
-                    className="absolute bottom-0 left-0 h-0.5 bg-blue-500/30 transition-all duration-1000" 
+                  <div
+                    className="absolute bottom-0 left-0 h-0.5 bg-blue-500/30 transition-all duration-1000"
                     style={{ width: `${(timeLeft / 120) * 100}%` }}
                   />
 
@@ -2688,8 +2690,8 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
                     <div className={cn(
                       "px-2 py-0.5 rounded text-[9px] font-bold",
                       job.status === 'printing' ? "bg-blue-900/40 text-blue-400" :
-                      job.status === 'completed' ? "bg-emerald-900/40 text-emerald-400" :
-                      "bg-red-900/40 text-red-400"
+                        job.status === 'completed' ? "bg-emerald-900/40 text-emerald-400" :
+                          "bg-red-900/40 text-red-400"
                     )}>
                       {job.status === 'printing' ? '인쇄 중' : job.status === 'completed' ? '완료' : '오류'}
                     </div>
@@ -2705,17 +2707,17 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
                     </div>
                     <span className="text-[9px] text-slate-500">후 목록에서 자동 삭제됩니다.</span>
                   </div>
-                  
+
                   <div className="flex gap-1">
                     {job.status !== 'printing' && (
-                      <button 
+                      <button
                         onClick={() => handleRetry(job.id)}
                         className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] rounded transition-colors"
                       >
                         🔄 다시 출력
                       </button>
                     )}
-                    <button 
+                    <button
                       onClick={() => handleDelete(job.id)}
                       className="flex-1 py-1.5 bg-slate-700 hover:bg-red-900/40 text-slate-300 text-[10px] rounded transition-colors"
                     >
@@ -2736,7 +2738,7 @@ function PrintQueueMonitor({ isOpen, onClose }: { isOpen: boolean, onClose: () =
 // In App, add a button to reopen if closed manually
 function MonitorToggle({ onClick, hasJobs }: { onClick: () => void, hasJobs: boolean }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
         "fixed bottom-6 right-6 p-3 rounded-full shadow-lg z-[399] transition-all",
